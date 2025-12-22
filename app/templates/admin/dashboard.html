@@ -1,0 +1,53 @@
+{% extends 'admin/base.html' %}
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <div class="bg-white shadow rounded p-4">
+    <div class="text-gray-500 text-sm">Total Employees</div>
+    <div class="text-3xl font-bold">{{ counts.total }}</div>
+  </div>
+  <div class="bg-white shadow rounded p-4">
+    <div class="text-gray-500 text-sm">Submitted</div>
+    <div class="text-3xl font-bold text-green-600">{{ counts.submitted }}</div>
+  </div>
+  <div class="bg-white shadow rounded p-4">
+    <div class="text-gray-500 text-sm">Pending</div>
+    <div class="text-3xl font-bold text-amber-600">{{ counts.pending }}</div>
+  </div>
+</div>
+
+<div class="bg-white shadow rounded p-4 mb-6">
+  <h2 class="text-lg font-semibold mb-2">Average Score by Department Head</h2>
+  <table class="min-w-full text-sm">
+    <thead>
+      <tr class="text-left border-b">
+        <th class="py-2">Department Head</th>
+        <th class="py-2">Average Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for head_id, display_name, avg_score in dept_avgs %}
+      <tr class="border-b last:border-none">
+        <td class="py-2">{{ display_name }}</td>
+        <td class="py-2">{{ '%.2f'|format(avg_score) }}</td>
+      </tr>
+      {% else %}
+      <tr><td class="py-2" colspan="2">No submissions yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="bg-white shadow rounded p-4">
+  <h2 class="text-lg font-semibold mb-2">Average Score per Question</h2>
+  <div class="space-y-3">
+    {% for question_no, avg_score in question_avgs %}
+    <div>
+      <div class="font-medium">Q{{ question_no }}. {{ questions[question_no-1] }}</div>
+      <div class="text-sm text-gray-700">Average: {{ '%.2f'|format(avg_score) }}</div>
+    </div>
+    {% else %}
+    <p class="text-sm">No responses yet.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.4/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-height-screen">
+  <div class="bg-white shadow rounded p-8 w-full max-w-md">
+    <h1 class="text-2xl font-semibold mb-4">Admin Login</h1>
+    {% if error %}
+      <div class="bg-red-100 text-red-700 px-4 py-2 rounded mb-4">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="/admin/login" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium">Email</label>
+        <input type="email" name="email" required class="mt-1 w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Password</label>
+        <input type="password" name="password" required class="mt-1 w-full border rounded px-3 py-2">
+      </div>
+      <button class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Login</button>
+    </form>
+  </div>
+</body>
+</html>

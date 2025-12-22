@@ -1,0 +1,86 @@
+{% extends 'admin/base.html' %}
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+  <div class="bg-white shadow rounded p-4">
+    <h2 class="text-lg font-semibold mb-3">Add Employee</h2>
+    <form method="post" action="/admin/employees/add" class="space-y-3">
+      <div>
+        <label class="block text-sm font-medium">Name</label>
+        <input type="text" name="name" required class="w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Email</label>
+        <input type="email" name="email" required class="w-full border rounded px-3 py-2">
+      </div>
+      <button class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add</button>
+    </form>
+  </div>
+
+  <div class="bg-white shadow rounded p-4">
+    <h2 class="text-lg font-semibold mb-3">Bulk Import (CSV lines)</h2>
+    <form method="post" action="/admin/employees/import" class="space-y-3">
+      <textarea name="csv_rows" rows="6" class="w-full border rounded px-3 py-2" placeholder="Name,Email\nAnother,person@example.com"></textarea>
+      <button class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Import</button>
+    </form>
+  </div>
+
+  <div class="bg-white shadow rounded p-4 space-y-3">
+    <h2 class="text-lg font-semibold">Bulk Email</h2>
+    <form method="post" action="/admin/send-invites">
+      <button class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 w-full">Send invites to all active</button>
+    </form>
+    <form method="post" action="/admin/send-reminders">
+      <button class="bg-amber-500 text-white px-4 py-2 rounded hover:bg-amber-600 w-full">Send reminders to pending</button>
+    </form>
+  </div>
+</div>
+
+<div class="bg-white shadow rounded p-4">
+  <h2 class="text-lg font-semibold mb-3">Employees</h2>
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead>
+        <tr class="text-left border-b">
+          <th class="py-2 px-2">Name</th>
+          <th class="py-2 px-2">Email</th>
+          <th class="py-2 px-2">Status</th>
+          <th class="py-2 px-2">Invited</th>
+          <th class="py-2 px-2">Submitted</th>
+          <th class="py-2 px-2">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for employee in employees %}
+        <tr class="border-b last:border-none">
+          <td class="py-2 px-2">{{ employee.name }}</td>
+          <td class="py-2 px-2">{{ employee.email }}</td>
+          <td class="py-2 px-2">
+            {% if not employee.is_active %}
+              <span class="text-gray-500">Inactive</span>
+            {% elif employee.submitted_at %}
+              <span class="text-green-700 font-semibold">Submitted</span>
+            {% else %}
+              <span class="text-amber-700 font-semibold">Pending</span>
+            {% endif %}
+          </td>
+          <td class="py-2 px-2 text-xs">{{ employee.invited_at or '—' }}</td>
+          <td class="py-2 px-2 text-xs">{{ employee.submitted_at or '—' }}</td>
+          <td class="py-2 px-2 space-x-2 text-sm">
+            <form method="post" action="/admin/employees/{{ employee.id }}/toggle" class="inline">
+              <button class="text-blue-600 hover:underline">{{ 'Activate' if not employee.is_active else 'Deactivate' }}</button>
+            </form>
+            {% if employee.is_active %}
+            <form method="post" action="/admin/employees/{{ employee.id }}/resend" class="inline">
+              <button class="text-amber-600 hover:underline">Resend invite</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td class="py-2" colspan="6">No employees added yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

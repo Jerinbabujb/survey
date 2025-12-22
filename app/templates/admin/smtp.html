@@ -1,0 +1,52 @@
+{% extends 'admin/base.html' %}
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+  <div class="bg-white shadow rounded p-4">
+    <h2 class="text-lg font-semibold mb-3">SMTP Settings</h2>
+    <form method="post" action="/admin/smtp" class="space-y-3">
+      <div>
+        <label class="block text-sm font-medium">Host</label>
+        <input type="text" name="host" value="{{ smtp.host }}" required class="w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Port</label>
+        <input type="number" name="port" value="{{ smtp.port }}" required class="w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Username</label>
+        <input type="text" name="username" value="{{ smtp.username or '' }}" class="w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Password</label>
+        <input type="password" name="password" value="{{ smtp.password or '' }}" class="w-full border rounded px-3 py-2">
+      </div>
+      <div class="flex items-center space-x-2">
+        <input type="checkbox" name="use_tls" value="1" {% if smtp.use_tls %}checked{% endif %}>
+        <label>Use TLS</label>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">From Email</label>
+        <input type="email" name="from_email" value="{{ smtp.from_email }}" required class="w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm font-medium">From Name</label>
+        <input type="text" name="from_name" value="{{ smtp.from_name }}" required class="w-full border rounded px-3 py-2">
+      </div>
+      <button class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Save</button>
+    </form>
+  </div>
+  <div class="bg-white shadow rounded p-4">
+    <h2 class="text-lg font-semibold mb-3">Send Test Email</h2>
+    {% if message %}
+      <div class="mb-3 text-sm {{ 'text-green-700' if 'sent' in message else 'text-red-700' }}">{{ message }}</div>
+    {% endif %}
+    <form method="post" action="/admin/smtp/test" class="space-y-3">
+      <div>
+        <label class="block text-sm font-medium">To Email</label>
+        <input type="email" name="to_email" required class="w-full border rounded px-3 py-2">
+      </div>
+      <button class="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700">Send Test</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
