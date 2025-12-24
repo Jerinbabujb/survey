@@ -29,3 +29,34 @@ def score_category(total: int) -> str:
     if total >= 26:
         return "Meets Target"
     return "Below Target"
+
+from typing import Optional, Iterable
+
+
+def calculate_total_score(scores: Iterable[int]) -> int:
+    """
+    Multiply EACH question score by 10, then sum.
+    Example: [5,4,5] -> 50 + 40 + 50 = 140
+    """
+    return sum(score * 10 for score in scores)
+
+
+
+
+
+import hashlib
+
+def hash_token(token: str) -> str:
+    """Generate a SHA-256 hash of a given token."""
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
+
+
+def get_score_category(score: int) -> str:
+    if 46 <= score <= 50:
+        return "Outstanding"
+    elif 36 <= score <= 45:
+        return "Exceeds Target"
+    elif 26 <= score <= 35:
+        return "Meets Target"
+    else:  # 10–25
+        return "Below Target"

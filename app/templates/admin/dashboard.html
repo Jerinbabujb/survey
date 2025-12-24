@@ -1,52 +1,57 @@
 {% extends 'admin/base.html' %}
 {% block content %}
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-  <div class="bg-white shadow rounded p-4">
-    <div class="text-gray-500 text-sm">Total Employees</div>
-    <div class="text-3xl font-bold">{{ counts.total }}</div>
+<!-- Stats Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-6">
+  <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
+    <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Total Employees</div>
+    <div class="text-3xl font-bold text-gray-800">{{ counts.total }}</div>
   </div>
-  <div class="bg-white shadow rounded p-4">
-    <div class="text-gray-500 text-sm">Submitted</div>
+  <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
+    <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Submitted</div>
     <div class="text-3xl font-bold text-green-600">{{ counts.submitted }}</div>
   </div>
-  <div class="bg-white shadow rounded p-4">
-    <div class="text-gray-500 text-sm">Pending</div>
+  <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
+    <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Pending</div>
     <div class="text-3xl font-bold text-amber-600">{{ counts.pending }}</div>
   </div>
 </div>
 
-<div class="bg-white shadow rounded p-4 mb-6">
-  <h2 class="text-lg font-semibold mb-2">Average Score by Department Head</h2>
-  <table class="min-w-full text-sm">
+<!-- Average Score by Department Head -->
+<div class="bg-white shadow-lg rounded-xl p-6 mb-6">
+  <h2 class="text-xl font-semibold mb-4 text-gray-800">Average Score by Department Head</h2>
+  <table class="min-w-full text-sm divide-y divide-gray-200">
     <thead>
-      <tr class="text-left border-b">
-        <th class="py-2">Department Head</th>
-        <th class="py-2">Average Score</th>
+      <tr class="bg-gray-50 text-left">
+        <th class="py-3 px-4 font-medium text-gray-500">Department Head</th>
+        <th class="py-3 px-4 font-medium text-gray-500">Average Score</th>
       </tr>
     </thead>
-    <tbody>
+    <tbody class="divide-y divide-gray-100">
       {% for head_id, display_name, avg_score in dept_avgs %}
-      <tr class="border-b last:border-none">
-        <td class="py-2">{{ display_name }}</td>
-        <td class="py-2">{{ '%.2f'|format(avg_score) }}</td>
+      <tr class="hover:bg-gray-50 transition-colors">
+        <td class="py-3 px-4">{{ display_name }}</td>
+        <td class="py-3 px-4">{{ '%.2f'|format(avg_score) }}</td>
       </tr>
       {% else %}
-      <tr><td class="py-2" colspan="2">No submissions yet.</td></tr>
+      <tr>
+        <td class="py-3 px-4 text-gray-400" colspan="2">No submissions yet.</td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 
-<div class="bg-white shadow rounded p-4">
-  <h2 class="text-lg font-semibold mb-2">Average Score per Question</h2>
-  <div class="space-y-3">
+<!-- Average Score per Question -->
+<div class="bg-white shadow-lg rounded-xl p-6">
+  <h2 class="text-xl font-semibold mb-4 text-gray-800">Average Score per Question</h2>
+  <div class="space-y-4">
     {% for question_no, avg_score in question_avgs %}
-    <div>
-      <div class="font-medium">Q{{ question_no }}. {{ questions[question_no-1] }}</div>
-      <div class="text-sm text-gray-700">Average: {{ '%.2f'|format(avg_score) }}</div>
+    <div class="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+      <div class="font-medium text-gray-800">Q{{ question_no }}. {{ questions[question_no-1] }}</div>
+      <div class="text-sm text-gray-600">Average: {{ '%.2f'|format(avg_score) }}</div>
     </div>
     {% else %}
-    <p class="text-sm">No responses yet.</p>
+    <p class="text-sm text-gray-400">No responses yet.</p>
     {% endfor %}
   </div>
 </div>

@@ -54,7 +54,7 @@ class SurveyResponse(Base):
     __tablename__ = "survey_responses"
 
     id = Column(Integer, primary_key=True)
-    submission_uuid = Column(UUID(as_uuid=True), nullable=False, default=uuid.uuid4)
+    submission_hash = Column(String(128), nullable=False)  # <- use hash
     dept_head_id = Column(Integer, ForeignKey("department_heads.id", ondelete="CASCADE"), nullable=False)
     question_no = Column(Integer, nullable=False)
     score = Column(Integer, nullable=False)
@@ -65,7 +65,7 @@ class SurveyComment(Base):
     __tablename__ = "survey_comments"
 
     id = Column(Integer, primary_key=True)
-    submission_uuid = Column(UUID(as_uuid=True), nullable=False, default=uuid.uuid4)
+    submission_hash = Column(String, nullable=False, index=True)
     dept_head_id = Column(Integer, ForeignKey("department_heads.id", ondelete="CASCADE"), nullable=False)
     comment = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=dt.datetime.utcnow)

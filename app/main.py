@@ -11,18 +11,25 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.sessions import SessionMiddleware
+from sqlalchemy.orm import selectinload
 
 from app import models
 from app.config import settings
 from app.db import Base, engine, get_session
 from app.email import send_email
 from app.security import get_password_hash, hash_token, verify_password
-from app.utils import QUESTIONS
+from app.utils import QUESTIONS,hash_token, get_score_category
+
+
+from app.models import Employee, EmployeeSubmission, SurveyResponse
+from app.utils import calculate_total_score, get_score_category
+from sqlalchemy import join
+
 
 app = FastAPI(title="Anonymous Survey")
 app.add_middleware(SessionMiddleware, secret_key=settings.secret_key, session_cookie="admin_session", https_only=False)
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+# app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 
@@ -172,10 +179,56 @@ async def admin_dashboard(request: Request, session: AsyncSession = Depends(get_
 
 
 @app.get("/admin/employees", response_class=HTMLResponse)
-async def admin_employees(request: Request, session: AsyncSession = Depends(get_session), admin_id: int = Depends(require_admin)):
-    result = await session.execute(select(models.Employee).order_by(models.Employee.name))
+async def admin_employees(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(Employee).options(selectinload(Employee.submissions))
+    )
     employees = result.scalars().all()
-    return templates.TemplateResponse("admin/employees.html", {"request": request, "employees": employees})
+
+    for employee in employees:
+        total_score = None
+        category = None
+        question_scores = []
+
+        if employee.submissions:
+            # Get all submission hashes for this employee
+            submission_hashes = [s.submission_hash for s in employee.submissions]
+
+            # Query SurveyResponse by submission_hash
+            stmt = select(SurveyResponse).where(SurveyResponse.submission_hash.in_(submission_hashes))
+            responses = (await session.execute(stmt)).scalars().all()
+
+            if responses:
+                for r in responses:
+                    score_multiplied = r.score
+                    question_scores.append({
+                        "question_no": r.question_no,
+                        "score": score_multiplied,
+                        "category": get_score_category(score_multiplied)
+                    })
+
+                # Total score
+                total_score = sum(q["score"] for q in question_scores)
+                category = get_score_category(total_score)
+
+        employee.total_score = total_score
+        employee.category = category
+        employee.question_scores = question_scores
+
+    return templates.TemplateResponse(
+        "admin/employees.html",
+        {
+            "request": request,
+            "employees": employees,
+        },
+    )
+
+
+
+
 
 
 @app.post("/admin/employees/add")
@@ -434,25 +487,35 @@ async def submit_survey(
     comment: Optional[str] = Form(None),
     session: AsyncSession = Depends(get_session),
 ):
+    # Lookup employee by token
     employee = await get_employee_by_token(session, token)
     if not employee or not employee.is_active:
         raise HTTPException(status_code=404, detail="Invite not found")
-    if employee.submitted_at:
-        return templates.TemplateResponse("survey/submitted.html", {"request": request, "employee": employee})
 
+    if employee.submitted_at:
+        return templates.TemplateResponse(
+            "survey/submitted.html", {"request": request, "employee": employee}
+        )
+
+    # Validate department head
     head = await session.get(models.DepartmentHead, dept_head_id)
     if not head or not head.is_active:
         raise HTTPException(status_code=400, detail="Invalid department head")
 
+    # Collect scores from form
     form_data = await request.form()
-    scores: list[int] = []
+    question_scores = []
+
     for i in range(1, 11):
         try:
             val = int(form_data.get(f"q{i}"))
         except (TypeError, ValueError):
             val = None
         if val is None or val not in {1, 2, 3, 4, 5}:
-            heads = await session.execute(select(models.DepartmentHead).where(models.DepartmentHead.is_active.is_(True)))
+            # Re-render form with error
+            heads = await session.execute(
+                select(models.DepartmentHead).where(models.DepartmentHead.is_active.is_(True))
+            )
             dept_heads = heads.scalars().all()
             return templates.TemplateResponse(
                 "survey/form.html",
@@ -473,26 +536,50 @@ async def submit_survey(
                 },
                 status_code=400,
             )
-        scores.append(val)
 
-    submission_uuid = uuid.uuid4()
-    submission_hash = hash_token(str(submission_uuid))
+        scaled_score = val * 10
+        category = get_score_category(scaled_score)
 
-    for idx, score in enumerate(scores, start=1):
+        question_scores.append({
+            "question_no": i,
+            "score": scaled_score,
+            "category": category
+        })
+
+    # Generate submission hash
+    submission_hash = hash_token(str(uuid.uuid4()))
+
+    # Save survey responses
+    for q in question_scores:
         session.add(
             models.SurveyResponse(
-                submission_uuid=submission_uuid, dept_head_id=dept_head_id, question_no=idx, score=score
+                submission_hash=submission_hash,
+                dept_head_id=dept_head_id,
+                question_no=q["question_no"],
+                score=q["score"]
             )
         )
 
+    # Save optional comment
     if comment:
-        session.add(models.SurveyComment(submission_uuid=submission_uuid, dept_head_id=dept_head_id, comment=comment))
+        session.add(
+            models.SurveyComment(
+                submission_hash=submission_hash,
+                dept_head_id=dept_head_id,
+                comment=comment
+            )
+        )
 
+    # Track employee submission
     session.add(models.EmployeeSubmission(employee_id=employee.id, submission_hash=submission_hash))
     employee.submitted_at = datetime.utcnow()
+
     await session.commit()
 
-    return templates.TemplateResponse("survey/submitted.html", {"request": request, "employee": employee})
+    return templates.TemplateResponse(
+        "survey/submitted.html",
+        {"request": request, "employee": employee, "question_scores": question_scores}
+    )
 
 
 @app.get("/health")

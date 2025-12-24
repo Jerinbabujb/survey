@@ -4,25 +4,36 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ title if title else 'Survey Admin' }}</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.4/dist/tailwind.min.css" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 text-gray-900">
-  <nav class="bg-white shadow">
-    <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-      <div class="font-semibold text-lg">Survey Admin</div>
-      <div class="space-x-4 text-sm">
-        <a href="/admin" class="hover:text-blue-600">Dashboard</a>
-        <a href="/admin/employees" class="hover:text-blue-600">Employees</a>
-        <a href="/admin/department-heads" class="hover:text-blue-600">Department Heads</a>
-        <a href="/admin/smtp" class="hover:text-blue-600">SMTP</a>
+<body class="bg-gray-100 text-gray-800 font-sans">
+
+  <!-- Navbar -->
+  <nav class="bg-white shadow-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+      <div class="text-2xl font-bold text-blue-600">Survey Admin</div>
+      <div class="flex items-center space-x-6 text-gray-700">
+        <a href="/admin" class="hover:text-blue-500 transition-colors">Dashboard</a>
+        <a href="/admin/employees" class="hover:text-blue-500 transition-colors">Employees</a>
+        <a href="/admin/department-heads" class="hover:text-blue-500 transition-colors">Department Heads</a>
+        <a href="/admin/smtp" class="hover:text-blue-500 transition-colors">SMTP</a>
         <form action="/admin/logout" method="post" class="inline">
-          <button class="text-red-600 hover:underline">Logout</button>
+          <button class="text-red-600 hover:text-red-500 font-medium transition-colors">Logout</button>
         </form>
       </div>
     </div>
   </nav>
-  <main class="max-w-6xl mx-auto p-6">
-    {% block content %}{% endblock %}
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto p-6 mt-6">
+    {% block content %}
+    <!-- Example Card -->
+    <div class="bg-white shadow-lg rounded-xl p-6">
+      <h1 class="text-2xl font-semibold mb-4">Welcome to Survey Admin</h1>
+      <p class="text-gray-600">Use the navigation above to manage surveys, employees, and system settings.</p>
+    </div>
+    {% endblock %}
   </main>
+
 </body>
 </html>
