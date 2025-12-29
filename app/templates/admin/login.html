@@ -4,25 +4,55 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Login</title>
-<script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-height-screen">
-  <div class="bg-white shadow rounded p-8 w-full max-w-md">
-    <h1 class="text-2xl font-semibold mb-4">Admin Login</h1>
-    {% if error %}
-      <div class="bg-red-100 text-red-700 px-4 py-2 rounded mb-4">{{ error }}</div>
-    {% endif %}
-    <form method="post" action="/admin/login" class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium">Email</label>
-        <input type="email" name="email" required class="mt-1 w-full border rounded px-3 py-2">
-      </div>
-      <div>
-        <label class="block text-sm font-medium">Password</label>
-        <input type="password" name="password" required class="mt-1 w-full border rounded px-3 py-2">
-      </div>
-      <button class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Login</button>
-    </form>
+<body class="bg-gray-50 min-h-screen flex">
+
+  <!-- Left Branding Section -->
+  <div class="hidden md:flex w-1/2  justify-center items-center">
+    <!-- You can place a logo or illustration here -->
+    <img src="https://identity.infinitycapital.bh//uploads/settings/21/cv-01.png" alt="Logo" class="object-contain">
   </div>
+
+  <!-- Right Login Form Section -->
+  <div class="flex w-full md:w-1/2 justify-center items-center px-8">
+    <div class="w-full max-w-md bg-white p-10 rounded-xl shadow-lg">
+      
+      <!-- Branding Text -->
+      <div class="mb-8 text-center">
+        <h1 class="text-3xl font-bold text-gray-900">InfinityCapital <span class="font-normal">Identity</span></h1>
+        <p class="mt-2 text-gray-500">Sign In</p>
+      </div>
+
+      <!-- Form -->
+      <form method="post" action="/admin/login" class="space-y-5">
+        <div>
+          <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <input type="email" name="email" id="email" required
+                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A39D6E] focus:border-[#A39D6E] transition">
+        </div>
+        <div>
+          <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+          <input type="password" name="password" id="password" required
+                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A39D6E] focus:border-[#A39D6E] transition">
+         
+        </div>
+        <div class="flex items-center space-x-2">
+          <input type="checkbox" id="remember" class="h-4 w-4 border-gray-300 rounded">
+          <label for="remember" class="text-sm text-gray-700">Remember me</label>
+        </div>
+        <button type="submit"
+                class="w-full py-2 px-4 rounded-lg bg-[#A39D6E] hover:bg-[#8f872f] text-white font-medium transition">
+          Login
+        </button>
+      </form>
+
+      <!-- Footer -->
+      <p class="text-center text-sm text-gray-400 mt-6">
+        All Rights Reserved © 2025 <a href="#" class="hover:underline text-gray-600">identity.infinitycapital.bh</a>
+      </p>
+    </div>
+  </div>
+
 </body>
 </html>
