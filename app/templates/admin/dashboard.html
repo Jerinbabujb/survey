@@ -33,16 +33,16 @@
         <td class="py-3 px-4">{{ '%.2f'|format(avg_score) }}</td>
       </tr>
       {% else %}
-      <tr>
+      <!-- <tr>
         <td class="py-3 px-4 text-gray-400" colspan="2">No submissions yet.</td>
-      </tr>
+      </tr> -->
       {% endfor %}
     </tbody>
   </table>
 </div>
 
 <!-- Average Score per Question -->
-<div class="bg-white shadow-lg rounded-xl p-6">
+<!-- <div class="bg-white shadow-lg rounded-xl p-6">
   <h2 class="text-xl font-semibold mb-4 text-gray-800">Average Score per Question</h2>
   <div class="space-y-4">
     {% for question_no, avg_score in question_avgs %}
@@ -55,4 +55,4 @@
     {% endfor %}
   </div>
 </div>
-{% endblock %}
+{% endblock %} -->
