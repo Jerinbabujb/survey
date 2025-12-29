@@ -273,10 +273,84 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
     employee.invited_at = datetime.utcnow()
     link = f"{base_url}/survey/{token}"
     html = f"""
-        <p>You have been invited to complete the anonymous survey.</p>
-        <p><a href='{link}'>Start survey</a></p>
-        <p>If the button does not work, copy this link into your browser: {link}</p>
-    """
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Survey Invitation</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f6f8; font-family: Arial, Helvetica, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f8; padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background-color:#2563eb; padding:24px; text-align:center;">
+              <h1 style="margin:0; color:#ffffff; font-size:22px;">
+                You’re Invited
+              </h1>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px; color:#1f2937;">
+              <p style="font-size:16px; line-height:1.6; margin-top:0;">
+                Hello,
+              </p>
+
+              <p style="font-size:16px; line-height:1.6;">
+                You have been invited to participate in an <strong>anonymous survey</strong>.
+                Your honest feedback is important and will help us improve.
+              </p>
+
+              <!-- Button -->
+              <div style="text-align:center; margin:32px 0;">
+                <a href="{link}"
+                   style="background-color:#2563eb;
+                          color:#ffffff;
+                          text-decoration:none;
+                          padding:14px 28px;
+                          font-size:16px;
+                          border-radius:6px;
+                          display:inline-block;">
+                  Start Survey
+                </a>
+              </div>
+
+              <p style="font-size:14px; color:#4b5563; line-height:1.6;">
+                If the button above doesn’t work, copy and paste this link into your browser:
+              </p>
+
+              <p style="font-size:14px; word-break:break-all;">
+                <a href="{link}" style="color:#2563eb;">{link}</a>
+              </p>
+
+              <p style="font-size:14px; color:#6b7280; line-height:1.6; margin-bottom:0;">
+                This invitation is unique to you. Please do not share it with others.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#f9fafb; padding:20px; text-align:center; font-size:12px; color:#9ca3af;">
+              <p style="margin:0;">
+                © {datetime.utcnow().year} Your Company. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+
     await send_email(
         host=smtp.host,
         port=smtp.port,

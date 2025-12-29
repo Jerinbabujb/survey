@@ -33,12 +33,17 @@ async def send_email(
     message.set_content(html_content, subtype="html")
 
     send_kwargs = {
-        "hostname": host,
-        "port": port,
-        "username": username,
-        "password": password,
-        "start_tls": use_tls,
-    }
+         "hostname": host,
+          "port": port,
+          "username": username,
+          "password": password,
+}
+
+    if port == 465:
+     send_kwargs["use_tls"] = True
+    else:
+     send_kwargs["start_tls"] = use_tls
+
 
     try:
         await aiosmtplib.send(message, **send_kwargs)
