@@ -110,17 +110,21 @@
         <tbody>
           {% for q in employee.question_scores %}
           <tr class="border-t">
-            <td class="px-3 py-2">Q{{ q.question_no }}
-              <!-- Hover box -->
-      <div
-        class="absolute left-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg
-               text-sm text-gray-700 p-3 opacity-0 invisible
-               group-hover:opacity-100 group-hover:visible transition-all duration-200 z-20"
-      >
-        {{ questions[q.question_no - 1] }}
-      </div>
+            <td class="px-3 py-2 relative">
+  <div class="group inline-block cursor-pointer font-medium text-blue-600">
+    Q{{ q.question_no }}
 
-            </td>
+    <!-- Hover box -->
+    <div
+      class="absolute left-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg
+             text-sm text-gray-700 p-3 opacity-0 invisible
+             group-hover:opacity-100 group-hover:visible transition-all duration-200 z-30"
+    >
+      {{ questions[q.question_no - 1] }}
+    </div>
+  </div>
+</td>
+
             <td class="px-3 py-2 text-center font-medium">{{ q.score }}</td>
             <td class="px-3 py-2 text-center">
               {% if q.category == "Outstanding" %}
