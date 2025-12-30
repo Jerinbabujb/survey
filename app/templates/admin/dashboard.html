@@ -24,6 +24,7 @@
       <tr class="bg-gray-50 text-left">
         <th class="py-3 px-4 font-medium text-gray-500">Department Head</th>
         <th class="py-3 px-4 font-medium text-gray-500">Average Score</th>
+        <th class="py-3 px-4 font-medium text-gray-500">Submitted Employees</th>
       </tr>
     </thead>
     <tbody class="divide-y divide-gray-100">
@@ -31,6 +32,7 @@
       <tr class="hover:bg-gray-50 transition-colors">
         <td class="py-3 px-4">{{ display_name }}</td>
         <td class="py-3 px-4">{{ '%.2f'|format(avg_score) }}</td>
+        <td class="py-3 px-4">{{ submitted_count }}</td>
       </tr>
       {% else %}
       <!-- <tr>

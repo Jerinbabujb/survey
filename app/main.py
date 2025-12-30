@@ -149,6 +149,8 @@ async def admin_dashboard(request: Request, session: AsyncSession = Depends(get_
             models.DepartmentHead.id,
             models.DepartmentHead.display_name,
             func.avg(models.SurveyResponse.score).label("avg_score"),
+            func.count(distinct(models.SurveyResponse.submission_hash)).label("submitted_count"),
+
         )
         .join(models.SurveyResponse, models.SurveyResponse.dept_head_id == models.DepartmentHead.id)
         .group_by(models.DepartmentHead.id)
