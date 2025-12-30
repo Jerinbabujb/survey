@@ -1,48 +1,86 @@
 {% extends 'survey/base.html' %}
 {% block content %}
-<div class="bg-white shadow rounded p-6">
-  <div class="mb-4">
-    <h1 class="text-2xl font-semibold mb-2">Department Head Survey</h1>
-    <p class="text-sm text-gray-700">Your responses are anonymous. We do not store your name, email, or any identifier with your answers. Completion is tracked only through a one-way hash of a random submission ID.</p>
+
+<div class="bg-white shadow rounded p-4 sm:p-6">
+
+  <!-- Header -->
+  <div class="mb-6">
+    <h1 class="text-xl sm:text-2xl font-semibold mb-2">
+      Department Head Survey
+    </h1>
+    <p class="text-sm text-gray-700 leading-relaxed">
+      Your responses are anonymous. We do not store your name, email, or any identifier
+      with your answers. Completion is tracked only through a one-way hash of a random
+      submission ID.
+    </p>
   </div>
 
   {% if error %}
-    <div class="bg-red-100 text-red-700 px-4 py-2 rounded mb-4">{{ error }}</div>
+    <div class="bg-red-100 text-red-700 px-4 py-2 rounded mb-4 text-sm">
+      {{ error }}
+    </div>
   {% endif %}
 
   <form method="post" action="/survey/{{ token }}" class="space-y-6">
+
+    <!-- Department Head Select -->
     <div>
-      <label class="block text-sm font-medium mb-2">Select Department Head</label>
-      <select name="dept_head_id" required class="w-full border rounded px-3 py-2">
+      <label class="block text-sm font-medium mb-2">
+        Select Department Head
+      </label>
+      <select
+        name="dept_head_id"
+        required
+        class="w-full border rounded px-3 py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
         {% for head in dept_heads %}
           <option value="{{ head.id }}">{{ head.display_name }}</option>
         {% endfor %}
       </select>
     </div>
 
-    <div class="space-y-4">
+    <!-- Questions -->
+    <div class="space-y-6">
       {% for question in questions %}
         {% set idx = loop.index %}
-        <div class="border-b pb-3">
-          <div class="font-medium">Q{{ idx }}. {{ question }}</div>
-          <div class="flex space-x-4 mt-2">
+
+        <div class="border-b pb-4">
+          <div class="font-medium text-sm sm:text-base mb-3">
+            Q{{ idx }}. {{ question }}
+          </div>
+
+          <!-- Radio Options -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-{{ scores|length }} gap-3">
             {% for score in scores %}
-              <label class="flex items-center space-x-1">
-                <input type="radio" name="q{{ idx }}" value="{{ score }}" required>
-                <span class="text-sm">{{ score }} - {{ score_labels[score] }}</span>
+              <label
+                class="flex items-center space-x-2 border rounded px-3 py-2 cursor-pointer hover:bg-gray-50"
+              >
+                <input
+                  type="radio"
+                  name="q{{ idx }}"
+                  value="{{ score }}"
+                  required
+                  class="accent-blue-600"
+                >
+                <span class="text-sm">
+                  {{ score }} – {{ score_labels[score] }}
+                </span>
               </label>
             {% endfor %}
           </div>
         </div>
+
       {% endfor %}
     </div>
 
-    <!-- <div>
-      <label class="block text-sm font-medium">Optional comment</label>
-      <textarea name="comment" rows="4" class="w-full border rounded px-3 py-2" placeholder="Share any additional context..."></textarea>
-    </div> -->
+    <!-- Submit Button -->
+    <button
+      class="w-full sm:w-auto bg-blue-600 text-white px-6 py-3 rounded font-medium hover:bg-blue-700 transition"
+    >
+      Submit survey
+    </button>
 
-    <button class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Submit survey</button>
   </form>
 </div>
+
 {% endblock %}
