@@ -159,7 +159,7 @@ async def admin_dashboard(request: Request, session: AsyncSession = Depends(get_
     question_avg_stmt = (
         select(
             models.SurveyResponse.question_no,
-            func.avg(models.SurveyResponse.score).label("avg_score"),
+            func.avg(models.SurveyResponse.score*10).label("avg_score"),
         )
         .group_by(models.SurveyResponse.question_no)
         .order_by(models.SurveyResponse.question_no)
@@ -173,7 +173,6 @@ async def admin_dashboard(request: Request, session: AsyncSession = Depends(get_
             "counts": {"total": total_employees, "submitted": submitted, "pending": pending},
             "dept_avgs": dept_avgs,
             "question_avgs": question_avgs,
-            "questions": QUESTIONS,
         },
     )
 
