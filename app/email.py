@@ -14,17 +14,14 @@ async def send_email(
     from_email: str = None,
     from_name: str = None,
 ):
-    # Fallback to environment variables if arguments are not provided
+    # Fallback to env vars
     host = host or os.environ.get("SMTP_HOST")
-    port = port or int(os.environ.get("SMTP_PORT", 587))
+    port = int(port or os.environ.get("SMTP_PORT", 587))
     username = username or os.environ.get("SMTP_USERNAME")
     password = password or os.environ.get("SMTP_PASSWORD")
     use_tls = use_tls if use_tls is not None else os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
     from_email = from_email or os.environ.get("SMTP_FROM_EMAIL")
     from_name = from_name or os.environ.get("SMTP_FROM_NAME", "Survey Bot")
-
-    if not all([host, port, username, password, from_email]):
-        raise ValueError("SMTP settings are incomplete. Please check your environment variables or arguments.")
 
     message = EmailMessage()
     message["From"] = f"{from_name} <{from_email}>"
@@ -32,20 +29,24 @@ async def send_email(
     message["Subject"] = subject
     message.set_content(html_content, subtype="html")
 
+    # HostGator specific: Port 465 uses use_tls (Implicit SSL)
+    # Port 587 uses start_tls (Explicit TLS)
     is_ssl_port = (port == 465)
 
-    send_kwargs = {
-        "hostname": host,
-        "port": port,
-        "username": username,
-        "password": password,
-        "use_tls": is_ssl_port,      # True for 465
-        "start_tls": not is_ssl_port and use_tls, # True for 587
-    }
-
     try:
-        await aiosmtplib.send(message, **send_kwargs)
-        print(f"Email sent successfully to {to_email}")
+        smtp_client = aiosmtplib.SMTP(
+            hostname=host,
+            port=port,
+            use_tls=is_ssl_port,  # True for 465
+            start_tls=not is_ssl_port and use_tls, # True for 587
+        )
+        
+        async with smtp_client:
+            # We add 'hostname' here to identify our server to HostGator
+            await smtp_client.login(username, password)
+            await smtp_client.send_message(message)
+            
+        print(f"✅ Email actually sent and confirmed for {to_email}")
     except Exception as e:
-        print(f"Failed to send email to {to_email}: {e}")
+        print(f"❌ SMTP Error: {e}")
         raise
