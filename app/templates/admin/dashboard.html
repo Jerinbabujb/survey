@@ -28,7 +28,7 @@
       </tr>
     </thead>
     <tbody class="divide-y divide-gray-100">
-      {% for head_id, display_name, avg_score in dept_avgs %}
+      {% for head_id, display_name, avg_score, submitted_count in dept_avgs %}
       <tr class="hover:bg-gray-50 transition-colors">
         <td class="py-3 px-4">{{ display_name }}</td>
         <td class="py-3 px-4">{{ '%.2f'|format(avg_score) }}</td>
