@@ -24,6 +24,7 @@ from app.utils import QUESTIONS,hash_token, get_score_category
 from app.models import Employee, EmployeeSubmission, SurveyResponse
 from app.utils import calculate_total_score, get_score_category
 from sqlalchemy import join
+from sqlalchemy import distinct
 
 
 app = FastAPI(title="Anonymous Survey")
