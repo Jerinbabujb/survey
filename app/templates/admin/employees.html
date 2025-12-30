@@ -14,7 +14,7 @@
         <label class="block text-sm font-medium mb-1">Email</label>
         <input type="email" name="email" required class="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
       </div>
-      <button class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">Add Employee</button>
+      <button class="w-full bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">Add Employee</button>
     </form>
   </div>
 
@@ -23,7 +23,7 @@
     <h2 class="text-xl font-bold mb-4">Bulk Import (CSV)</h2>
     <form method="post" action="/admin/employees/import" class="space-y-4">
       <textarea name="csv_rows" rows="6" class="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="Name,Email\nAnother,person@example.com"></textarea>
-      <button class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">Import Empoyees</button>
+      <button class="w-full bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">Import Empoyees</button>
     </form>
   </div>
 
@@ -31,10 +31,10 @@
   <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-xl transition-shadow duration-300 space-y-4">
     <h2 class="text-xl font-bold mb-4">Bulk Email</h2>
     <form method="post" action="/admin/send-invites">
-      <button class="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors">Send Invites</button>
+      <button class="w-full bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-[#ad9f6f] transition-colors">Send Invites</button>
     </form>
     <form method="post" action="/admin/send-reminders">
-      <button class="w-full bg-amber-500 text-white px-4 py-2 rounded-md hover:bg-amber-600 transition-colors">Send Reminders</button>
+      <button class="w-full bg-black text-white px-4 py-2 rounded-md hover:bg-[#000] transition-colors">Send Reminders</button>
     </form>
   </div>
 </div>
@@ -45,8 +45,20 @@
   <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-xl transition-shadow duration-300">
     <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
       <div>
-        <h3 class="text-lg font-semibold">{{ employee.name }}</h3>
-        <p class="text-sm text-gray-500">{{ employee.email }}</p>
+      {% if not employee.submitted_at %}
+      <h3 class="text-lg font-semibold">{{ employee.name }}</h3>
+  <p class="text-sm text-gray-500">{{ employee.email }}</p>
+{% else %}
+  <!-- Masked name -->
+  <h3 class="text-lg font-semibold">
+    {{ employee.name[0] }}***
+  </h3>
+  <!-- Masked email -->
+  <p class="text-sm text-gray-500">
+    {{ employee.email.split('@')[0][:1] }}***@{{ employee.email.split('@')[1] }}
+  </p>
+{% endif %}
+
         <p class="text-sm mt-1">
           {% if not employee.is_active %}
             <span class="text-gray-400 font-medium">Inactive</span>
