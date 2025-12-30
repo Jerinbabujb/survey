@@ -32,12 +32,15 @@ async def send_email(
     message["Subject"] = subject
     message.set_content(html_content, subtype="html")
 
+    is_ssl_port = (port == 465)
+
     send_kwargs = {
         "hostname": host,
         "port": port,
         "username": username,
         "password": password,
-        "start_tls": use_tls,
+        "use_tls": is_ssl_port,      # True for 465
+        "start_tls": not is_ssl_port and use_tls, # True for 587
     }
 
     try:
