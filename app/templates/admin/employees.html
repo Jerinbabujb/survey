@@ -55,7 +55,7 @@
   </h3>
   <!-- Masked email -->
   <p class="text-sm text-gray-500">
-    {{ employee.email.split('@')[0][:1] }}***@{{ employee.email.split('@')[1] }}
+    ***@{{ employee.email.split('@')[1] }}
   </p>
 {% endif %}
 
@@ -74,15 +74,27 @@
         </p>
       </div>
       <div class="flex space-x-2 mt-2 md:mt-0">
-        <form method="post" action="/admin/employees/{{ employee.id }}/toggle">
-          <button class="text-blue-600 hover:underline">{{ 'Activate' if not employee.is_active else 'Deactivate' }}</button>
-        </form>
-        {% if employee.is_active %}
-        <form method="post" action="/admin/employees/{{ employee.id }}/resend">
-          <button class="text-amber-600 hover:underline">Send Invite</button>
-        </form>
-        {% endif %}
-      </div>
+  <form method="post" action="/admin/employees/{{ employee.id }}/toggle">
+    <button 
+      class="text-blue-600 hover:underline disabled:opacity-50" 
+      {{ 'disabled' if employee.submitted_at else '' }}
+    >
+      {{ 'Activate' if not employee.is_active else 'Deactivate' }}
+    </button>
+  </form>
+
+  {% if employee.is_active %}
+  <form method="post" action="/admin/employees/{{ employee.id }}/resend">
+    <button 
+      class="text-amber-600 hover:underline disabled:opacity-50" 
+      {{ 'disabled' if employee.submitted_at else '' }}
+    >
+      Send Invite
+    </button>
+  </form>
+  {% endif %}
+</div>
+
     </div>
 
     {% if employee.question_scores %}
