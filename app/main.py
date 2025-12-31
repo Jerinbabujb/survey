@@ -22,7 +22,7 @@ from app.utils import QUESTIONS,hash_token, get_score_category
 
 
 from app.models import Employee, EmployeeSubmission, SurveyResponse
-from app.utils import calculate_total_score, get_score_category, SCORES, normalize_score
+from app.utils import weighted_score, get_score_category, get_score_category_score
 from sqlalchemy import join
 from sqlalchemy import distinct
 
@@ -192,48 +192,50 @@ async def admin_employees(
     employees = result.scalars().all()
 
     for employee in employees:
-        employee.question_scores = []
-        employee.total_score = None
-        employee.category = None
+        total_score = None
+        category = None
+        question_scores = []
 
-        if not employee.submissions:
-            continue
+        if employee.submissions:
+            # Get all submission hashes for this employee
+            submission_hashes = [s.submission_hash for s in employee.submissions]
 
-        submission_hashes = [s.submission_hash for s in employee.submissions]
+            # Query SurveyResponse by submission_hash
+            stmt = select(SurveyResponse).where(SurveyResponse.submission_hash.in_(submission_hashes))
+            responses = (await session.execute(stmt)).scalars().all()
 
-        responses = (
-            await session.execute(
-                select(SurveyResponse)
-                .where(SurveyResponse.submission_hash.in_(submission_hashes))
-            )
-        ).scalars().all()
+            if responses:
+                
+                for r in responses:
+                    raw_score = int(r.score)
+                    og_value=raw_score/10
+                    print(f"Raw score from DB for question {r.question_no}: {og_value}")
+                    score_multiplied = weighted_score(og_value)
+                    question_scores.append({
+                        "question_no": r.question_no,
+                        "score": score_multiplied,
+                        "category": get_score_category(score_multiplied),
+                        "score_category":get_score_category_score(score_multiplied)
+                    })
 
-        if not responses:
-            continue
+                # Total score
+                total_score = sum(q["score"] for q in question_scores)
+                category = get_score_category(total_score)
 
-        raw_scores = []
-
-        for r in responses:
-            weighted_score = normalize_score(r.score)
-            raw_scores.append(r.score)
-
-            employee.question_scores.append({
-                "question_no": r.question_no,
-                "score": weighted_score,  # ← 10 or 9
-            })
-
-        employee.total_score = calculate_total_score(raw_scores)
-        employee.category = get_score_category(employee.total_score)
+        employee.total_score = total_score
+        employee.category = category
+        employee.question_scores = question_scores
 
     return templates.TemplateResponse(
         "admin/employees.html",
         {
             "request": request,
             "employees": employees,
+            "score":weighted_score,
             "questions": QUESTIONS,
+            "category_score":get_score_category_score(score_multiplied)
         },
     )
-
 
 
 

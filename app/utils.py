@@ -1,21 +1,16 @@
-from typing import Iterable
-import hashlib
-
-# =========================
-# Survey Questions
-# =========================
-
 QUESTIONS = [
     "How satisfied are you with the overall performance of the department head?",
     "How effectively does the department head align their team’s objectives with overall company strategy?",
     "How satisfied are you with the level of internal support provided by the department head?",
     "How effective is the department head in communicating with the Executive Leadership Team?",
     "How collaborative is the department head when working cross-functionally on company-wide initiatives?",
+    "How proactive is the department head in anticipating challenges and escalating issues appropriately?",
+    "How effectively does the department head demonstrate leadership within their team (e.g., motivation, accountability, clarity)?",
+    "How effectively does the department head model company values and culture in their day-to-day leadership?",
+    "Does the department head have a positive impact on company performance this year?",
+    "How effectively does the department head identify, manage, and communicate risks that could impact company performance or reputation?",
 ]
 
-# =========================
-# Score Labels
-# =========================
 
 SCORES = {
     5: "Strongly Agree",
@@ -25,57 +20,56 @@ SCORES = {
     1: "Strongly Disagree",
 }
 
-# =========================
-# Scoring Logic
-# =========================
 
-def normalize_score(score: int) -> int:
-    """
-    Convert raw score (1–5) into weighted score.
-    Rule:
-      5 -> 10
-      1–4 -> 9
-    """
-    return 10 if score == 5 else 9
-
-
-def calculate_total_score(scores: Iterable[int]) -> int:
-    """
-    Calculate total weighted score.
-
-    Example:
-      [5, 4, 3, 2, 1]
-      -> 10 + 9 + 9 + 9 + 9
-      -> 46 (if 5 questions, max = 45)
-    """
-    return sum(normalize_score(score) for score in scores)
-
-
-def get_score_category(total_score: int) -> str:
-    """
-    Convert total weighted score into a performance category.
-
-    Score Ranges:
-      41–45 -> Outstanding
-      32–40 -> Exceeds Target
-      23–31 -> Meets Target
-       9–22 -> Below Target
-    """
-    if 41 <= total_score <= 45:
+def score_category(total: int) -> str:
+    if total >= 46:
         return "Outstanding"
-    elif 32 <= total_score <= 40:
+    if total >= 36:
         return "Exceeds Target"
-    elif 23 <= total_score <= 31:
+    if total >= 26:
         return "Meets Target"
-    else:
-        return "Below Target"
+    return "Below Target"
 
-# =========================
-# Security Utilities
-# =========================
+from typing import Optional, Iterable
+
+
+def weighted_score(score: int) -> int:
+    """Return weighted score for a single question."""
+    score=int(score)
+    return score * 9
+
+
+
+
+
+
+
+import hashlib
 
 def hash_token(token: str) -> str:
-    """
-    Generate a SHA-256 hash for survey tokens.
-    """
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    """Generate a SHA-256 hash of a given token."""
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
+
+
+def get_score_category(score: int) -> str:
+    if 41 <= score <= 45:
+        return "Outstanding"
+    elif 32 <= score <= 40:
+        return "Exceeds Target"
+    elif 23 <= score <= 31:
+        return "Meets Target"
+    else:  # 10–25
+        return "Below Target"
+
+
+def get_score_category_score(score: int) -> str:
+    if 41 <= score <= 45:
+        return "Exceptional leadership, highly supportive, inspires and motivates the team consistently."
+    elif 32 <= score <= 40:
+        return "Frequently goes beyond expectations, provides strong support and communication."
+    elif 23 <= score <= 31:
+        return "Performs at expected level, provides adequate support, guidance, and communication."
+    else:  # 10–25
+        return "Performance below expectations, needs improvement in support, communication, or leadership."
+
+
