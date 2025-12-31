@@ -226,6 +226,7 @@ async def admin_employees(
         {
             "request": request,
             "employees": employees,
+            "questions": QUESTIONS,
         },
     )
 

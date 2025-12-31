@@ -38,7 +38,13 @@ def calculate_total_score(scores: Iterable[int]) -> int:
     Multiply EACH question score by 10, then sum.
     Example: [5,4,5] -> 50 + 40 + 50 = 140
     """
-    return sum(score * 10 for score in scores)
+    total = 0
+    for score in scores:
+        if score == 5:
+            total += 10
+        else:  # 1, 2, 3, 4
+            total += 9
+    return total
 
 
 
