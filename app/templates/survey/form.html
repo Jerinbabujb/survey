@@ -51,7 +51,7 @@
             </div>
 
             <!-- Card-Style Options -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-{{ scores|length }} gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-{{ scores|length }} gap-4 ">
               {% for score in scores %}
                 <label class="cursor-pointer group">
                   <input
@@ -61,9 +61,9 @@
                     required
                     class="peer hidden"
                   >
-                  <div class="border border-white rounded-xl p-4 h-[120px] text-center transition-all duration-200
+                  <div class="border border-white rounded-xl p-4 h-[100px] sm:h-[120px] text-center transition-all duration-200
                               peer-checked:border-blue-600 peer-checked:bg-white peer-checked:text-black
-                              hover:border-blue-400 hover:bg-white hover:text-black">
+                              hover:border-blue-400 hover:bg-white hover:text-black ">
                     <span class="font-semibold text-black peer-checked:text-black text-lg">{{ score }}</span>
                     <p class="text-black peer-checked:text-black text-sm mt-1">{{ score_labels[score] }}</p>
                   </div>
