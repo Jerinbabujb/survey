@@ -249,9 +249,69 @@ async def add_employee(
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
-    employee = models.Employee(name=name.strip(), email=email.strip())
+    email = email.strip()
+    name = name.strip()
+
+    # Check if employee with the same email already exists
+    result = await session.execute(select(models.Employee).where(models.Employee.email == email))
+    existing_employee = result.scalar_one_or_none()
+
+    if existing_employee:
+        # Modern styled alert
+        html_content = f"""
+        <html>
+        <head>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    background-color: #f4f4f4;
+                    margin: 0;
+                }}
+                .alert-box {{
+                    background-color: #a99a68;
+                    color: white;
+                    padding: 20px 30px;
+                    border-radius: 10px;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+                    text-align: center;
+                    animation: slideDown 0.5s ease;
+                }}
+                .alert-box button {{
+                    margin-top: 15px;
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 5px;
+                    background-color: white;
+                    color: #a99a68;
+                    font-weight: bold;
+                    cursor: pointer;
+                }}
+                @keyframes slideDown {{
+                    from {{ transform: translateY(-50px); opacity: 0; }}
+                    to {{ transform: translateY(0); opacity: 1; }}
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="alert-box">
+                Employee with email <strong>{email}</strong> already exists!
+                <br>
+                <button onclick="window.location.href='/admin/employees'">Go Back</button>
+            </div>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content)
+
+    # Add new employee
+    employee = models.Employee(name=name, email=email)
     session.add(employee)
     await session.commit()
+
     return RedirectResponse(url="/admin/employees", status_code=303)
 
 
