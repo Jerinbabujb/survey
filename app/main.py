@@ -139,33 +139,61 @@ async def admin_logout(request: Request):
     return RedirectResponse(url="/admin/login", status_code=303)
 
 
+from sqlalchemy import select, func, distinct
+from app.models import Employee, EmployeeSubmission, SurveyResponse, DepartmentHead
+
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_dashboard(request: Request, session: AsyncSession = Depends(get_session), admin_id: int = Depends(require_admin)):
-    total_employees = (await session.execute(select(func.count(models.Employee.id)))).scalar_one()
-    submitted = (await session.execute(select(func.count(models.Employee.id)).where(models.Employee.submitted_at.is_not(None)))).scalar_one()
+async def admin_dashboard(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    admin_id: int = Depends(require_admin),
+):
+    
+
+    # Total employees
+    total_employees = await session.scalar(select(func.count(Employee.id)))
+    # Submitted employees (any submission)
+    submitted = await session.scalar(
+        select(func.count(distinct(EmployeeSubmission.employee_id)))
+        .join(Employee, Employee.id == EmployeeSubmission.employee_id)
+    )
     pending = total_employees - submitted
 
+    # Subquery: submitted employees per department
+    submitted_subq = (
+        select(
+            SurveyResponse.dept_head_id.label("dept_id"),
+            func.count(distinct(EmployeeSubmission.employee_id)).label("submitted_count")
+        )
+        .join(EmployeeSubmission, EmployeeSubmission.submission_hash == SurveyResponse.submission_hash)
+        .join(Employee, Employee.id == EmployeeSubmission.employee_id)
+        .group_by(SurveyResponse.dept_head_id)
+        .subquery()
+    )
+
+    # Department averages
     dept_avg_stmt = (
         select(
-            models.DepartmentHead.id,
-            models.DepartmentHead.display_name,
-            func.avg(models.SurveyResponse.score).label("avg_score"),
-            func.count(distinct(models.SurveyResponse.submission_hash)).label("submitted_count"),
-
+            DepartmentHead.id,
+            DepartmentHead.display_name,
+            func.coalesce(func.avg(SurveyResponse.score), 0).label("avg_score"),
+            func.coalesce(submitted_subq.c.submitted_count, 0).label("submitted_count")
         )
-        .join(models.SurveyResponse, models.SurveyResponse.dept_head_id == models.DepartmentHead.id)
-        .group_by(models.DepartmentHead.id)
-        .order_by(models.DepartmentHead.display_name)
+        .outerjoin(SurveyResponse, SurveyResponse.dept_head_id == DepartmentHead.id)
+        .outerjoin(submitted_subq, submitted_subq.c.dept_id == DepartmentHead.id)
+        .group_by(DepartmentHead.id, submitted_subq.c.submitted_count)
+        .order_by(DepartmentHead.display_name)
     )
     dept_avgs = (await session.execute(dept_avg_stmt)).all()
 
+    # Question averages across all submissions
     question_avg_stmt = (
         select(
-            models.SurveyResponse.question_no,
-            func.avg(models.SurveyResponse.score).label("avg_score"),
+            SurveyResponse.question_no,
+            func.coalesce(func.avg(SurveyResponse.score), 0).label("avg_score"),
         )
-        .group_by(models.SurveyResponse.question_no)
-        .order_by(models.SurveyResponse.question_no)
+        .group_by(SurveyResponse.question_no)
+        .order_by(SurveyResponse.question_no)
     )
     question_avgs = (await session.execute(question_avg_stmt)).all()
 
@@ -179,6 +207,8 @@ async def admin_dashboard(request: Request, session: AsyncSession = Depends(get_
             "questions": QUESTIONS,
         },
     )
+
+
 
 
 @app.get("/admin/employees", response_class=HTMLResponse)

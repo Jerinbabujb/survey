@@ -31,7 +31,7 @@
       {% for head_id, display_name, avg_score, submitted_count in dept_avgs %}
       <tr class="hover:bg-gray-50 transition-colors">
         <td class="py-3 px-4">{{ display_name }}</td>
-        <td class="py-3 px-4">{{ '%.2f'|format(avg_score) }}</td>
+        <td class="py-3 px-4">{{ '%.2f'|format(avg_score) if avg_score is not none else '0.00' }}</td>
         <td class="py-3 px-4">{{ submitted_count }}</td>
       </tr>
       {% else %}
