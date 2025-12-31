@@ -209,7 +209,6 @@ async def admin_employees(
                 for r in responses:
                     raw_score = int(r.score)
                     og_value=raw_score/10
-                    print(f"Raw score from DB for question {r.question_no}: {og_value}")
                     score_multiplied = weighted_score(og_value)
                     question_scores.append({
                         "question_no": r.question_no,
@@ -233,7 +232,7 @@ async def admin_employees(
             "employees": employees,
             "score":weighted_score,
             "questions": QUESTIONS,
-            "category_score":get_score_category_score(score_multiplied)
+            
         },
     )
 
@@ -290,16 +289,16 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
   <meta charset="UTF-8" />
   <title>Survey Invitation</title>
 </head>
-<body style="margin:0; padding:0; background-color:#f4f6f8; font-family: Arial, Helvetica, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f8; padding:40px 0;">
+<body style="margin:0; padding:0; background-color:#000000; font-family: Arial, Helvetica, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#000000; padding:40px 0;">
     <tr>
       <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#a99a68; border-radius:8px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
           
           <!-- Header -->
           <tr>
-            <td style="background-color:#2563eb; padding:24px; text-align:center;">
-              <h1 style="margin:0; color:#ffffff; font-size:22px;">
+            <td style="background-color:#000000; padding:24px; text-align:center;">
+              <h1 style="margin:0; color:#a99a68; font-size:22px;">
                 You’re Invited
               </h1>
             </td>
@@ -307,7 +306,7 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
 
           <!-- Body -->
           <tr>
-            <td style="padding:32px; color:#1f2937;">
+            <td style="padding:32px; color:#000000;">
               <p style="font-size:16px; line-height:1.6; margin-top:0;">
                 Hello,
               </p>
@@ -320,8 +319,8 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
               <!-- Button -->
               <div style="text-align:center; margin:32px 0;">
                 <a href="{link}"
-                   style="background-color:#2563eb;
-                          color:#ffffff;
+                   style="background-color:#000000;
+                          color:#a99a68;
                           text-decoration:none;
                           padding:14px 28px;
                           font-size:16px;
@@ -331,15 +330,15 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
                 </a>
               </div>
 
-              <p style="font-size:14px; color:#4b5563; line-height:1.6;">
-                If the button above doesn’t work, copy and paste this link into your browser:
+              <p style="font-size:14px; color:#000000; line-height:1.6;">
+                If the button above doesn’t work, click the hyperlink below:
               </p>
 
               <p style="font-size:14px; word-break:break-all;">
-                <a href="{link}" style="color:#2563eb;">{link}</a>
+                <a href="{link}" style="color:#000000; text-decoration:underline;">Click here to start the survey</a>
               </p>
 
-              <p style="font-size:14px; color:#6b7280; line-height:1.6; margin-bottom:0;">
+              <p style="font-size:14px; color:#000000; line-height:1.6; margin-bottom:0;">
                 This invitation is unique to you. Please do not share it with others.
               </p>
             </td>
@@ -347,7 +346,7 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
 
           <!-- Footer -->
           <tr>
-            <td style="background-color:#f9fafb; padding:20px; text-align:center; font-size:12px; color:#9ca3af;">
+            <td style="background-color:#000000; padding:20px; text-align:center; font-size:12px; color:#a99a68;">
               <p style="margin:0;">
                 © {datetime.utcnow().year} Your Company. All rights reserved.
               </p>
@@ -361,6 +360,7 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
 </body>
 </html>
 """
+
 
     await send_email(
         host=smtp.host,
