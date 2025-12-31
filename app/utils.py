@@ -1,3 +1,10 @@
+from typing import Iterable
+import hashlib
+
+# =========================
+# Survey Questions
+# =========================
+
 QUESTIONS = [
     "How satisfied are you with the overall performance of the department head?",
     "How effectively does the department head align their team’s objectives with overall company strategy?",
@@ -11,6 +18,9 @@ QUESTIONS = [
     "How effectively does the department head identify, manage, and communicate risks that could impact company performance or reputation?",
 ]
 
+# =========================
+# Score Labels
+# =========================
 
 SCORES = {
     5: "Strongly Agree",
@@ -20,49 +30,52 @@ SCORES = {
     1: "Strongly Disagree",
 }
 
+# =========================
+# Scoring Logic
+# =========================
 
-def score_category(total: int) -> str:
-    if total >= 46:
-        return "Outstanding"
-    if total >= 36:
-        return "Exceeds Target"
-    if total >= 26:
-        return "Meets Target"
-    return "Below Target"
-
-from typing import Optional, Iterable
+def normalize_score(score: int) -> int:
+    """
+    Convert raw survey score (1–5) into weighted score.
+    Rule:
+      5 -> 10
+      1–4 -> 9
+    """
+    return 10 if score == 5 else 9
 
 
 def calculate_total_score(scores: Iterable[int]) -> int:
     """
-    Multiply EACH question score by 10, then sum.
-    Example: [5,4,5] -> 50 + 40 + 50 = 140
+    Calculate total weighted score for a submission.
+    Example:
+      [5, 5, 4, 3] -> 10 + 10 + 9 + 9 = 38
     """
-    total = 0
-    for score in scores:
-        if score == 5:
-            total += 10
-        else:  # 1, 2, 3, 4
-            total += 9
-    return total
+    return sum(normalize_score(score) for score in scores)
 
 
+def get_score_category(total_score: int) -> str:
+    """
+    Convert total weighted score into performance category.
+    Total score range (10 questions):
+      46–50 -> Outstanding
+      36–45 -> Exceeds Target
+      26–35 -> Meets Target
+      10–25 -> Below Target
+    """
+    if total_score >= 46:
+        return "Outstanding"
+    if total_score >= 36:
+        return "Exceeds Target"
+    if total_score >= 26:
+        return "Meets Target"
+    return "Below Target"
 
-
-
-import hashlib
+# =========================
+# Security Utilities
+# =========================
 
 def hash_token(token: str) -> str:
-    """Generate a SHA-256 hash of a given token."""
-    return hashlib.sha256(token.encode('utf-8')).hexdigest()
-
-
-def get_score_category(score: int) -> str:
-    if 46 <= score <= 50:
-        return "Outstanding"
-    elif 36 <= score <= 45:
-        return "Exceeds Target"
-    elif 26 <= score <= 35:
-        return "Meets Target"
-    else:  # 10–25
-        return "Below Target"
+    """
+    Generate a SHA-256 hash for survey tokens.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
