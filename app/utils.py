@@ -11,11 +11,6 @@ QUESTIONS = [
     "How satisfied are you with the level of internal support provided by the department head?",
     "How effective is the department head in communicating with the Executive Leadership Team?",
     "How collaborative is the department head when working cross-functionally on company-wide initiatives?",
-    "How proactive is the department head in anticipating challenges and escalating issues appropriately?",
-    "How effectively does the department head demonstrate leadership within their team (e.g., motivation, accountability, clarity)?",
-    "How effectively does the department head model company values and culture in their day-to-day leadership?",
-    "Does the department head have a positive impact on company performance this year?",
-    "How effectively does the department head identify, manage, and communicate risks that could impact company performance or reputation?",
 ]
 
 # =========================
@@ -36,7 +31,7 @@ SCORES = {
 
 def normalize_score(score: int) -> int:
     """
-    Convert raw survey score (1–5) into weighted score.
+    Convert raw score (1–5) into weighted score.
     Rule:
       5 -> 10
       1–4 -> 9
@@ -46,29 +41,34 @@ def normalize_score(score: int) -> int:
 
 def calculate_total_score(scores: Iterable[int]) -> int:
     """
-    Calculate total weighted score for a submission.
+    Calculate total weighted score.
+
     Example:
-      [5, 5, 4, 3] -> 10 + 10 + 9 + 9 = 38
+      [5, 4, 3, 2, 1]
+      -> 10 + 9 + 9 + 9 + 9
+      -> 46 (if 5 questions, max = 45)
     """
     return sum(normalize_score(score) for score in scores)
 
 
 def get_score_category(total_score: int) -> str:
     """
-    Convert total weighted score into performance category.
-    Total score range (10 questions):
-      46–50 -> Outstanding
-      36–45 -> Exceeds Target
-      26–35 -> Meets Target
-      10–25 -> Below Target
+    Convert total weighted score into a performance category.
+
+    Score Ranges:
+      41–45 -> Outstanding
+      32–40 -> Exceeds Target
+      23–31 -> Meets Target
+       9–22 -> Below Target
     """
-    if total_score >= 46:
+    if 41 <= total_score <= 45:
         return "Outstanding"
-    if total_score >= 36:
+    elif 32 <= total_score <= 40:
         return "Exceeds Target"
-    if total_score >= 26:
+    elif 23 <= total_score <= 31:
         return "Meets Target"
-    return "Below Target"
+    else:
+        return "Below Target"
 
 # =========================
 # Security Utilities
