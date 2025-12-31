@@ -308,7 +308,7 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
           <tr>
             <td style="padding:32px; color:#000000;">
               <p style="font-size:16px; line-height:1.6; margin-top:0;">
-                Hello,
+                Hello {employee.name},
               </p>
 
               <p style="font-size:16px; line-height:1.6;">
@@ -348,7 +348,7 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
           <tr>
             <td style="background-color:#000000; padding:20px; text-align:center; font-size:12px; color:#a99a68;">
               <p style="margin:0;">
-                © {datetime.utcnow().year} Your Company. All rights reserved.
+                © {datetime.utcnow().year} InfinityCapital. All rights reserved.
               </p>
             </td>
           </tr>

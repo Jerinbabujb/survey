@@ -1,86 +1,91 @@
 {% extends 'survey/base.html' %}
 {% block content %}
 
-<div class="bg-white shadow rounded p-4 sm:p-6">
+<div class="bg-black min-h-screen flex items-center justify-center py-10 px-4">
+  <div class="bg-[#a99a68] shadow-2xl rounded-2xl w-full max-w-3xl p-6 sm:p-10">
 
-  <!-- Header -->
-  <div class="mb-6">
-    <h1 class="text-xl sm:text-2xl font-semibold mb-2">
-      Department Head Survey
-    </h1>
-    <p class="text-sm text-gray-700 leading-relaxed">
-      Your responses are anonymous. We do not store your name, email, or any identifier
-      with your answers. Completion is tracked only through a one-way hash of a random
-      submission ID.
-    </p>
-  </div>
-
-  {% if error %}
-    <div class="bg-red-100 text-red-700 px-4 py-2 rounded mb-4 text-sm">
-      {{ error }}
+    <!-- Header -->
+    <div class="mb-8 text-center">
+      <h1 class="text-2xl sm:text-3xl font-bold text-black mb-2">
+        Department Head Survey
+      </h1>
+      <p class="text-black text-sm sm:text-base leading-relaxed">
+        Your responses are anonymous. We do not store your name, email, or any identifier
+        with your answers. Completion is tracked only through a one-way hash of a random
+        submission ID.
+      </p>
     </div>
-  {% endif %}
 
-  <form method="post" action="/survey/{{ token }}" class="space-y-6">
+    {% if error %}
+      <div class="bg-red-800 text-red-300 px-4 py-2 rounded mb-6 text-sm text-center">
+        {{ error }}
+      </div>
+    {% endif %}
 
-    <!-- Department Head Select -->
-    <div>
-      <label class="block text-sm font-medium mb-2">
-        Select Department Head
-      </label>
-      <select
-        name="dept_head_id"
-        required
-        class="w-full border rounded px-3 py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-      >
-        {% for head in dept_heads %}
-          <option value="{{ head.id }}">{{ head.display_name }}</option>
+    <form method="post" action="/survey/{{ token }}" class="space-y-8">
+
+      <!-- Department Head Select -->
+      <div>
+        <label class="block text-black font-semibold mb-2">
+          Select Department Head
+        </label>
+        <select
+          name="dept_head_id"
+          required
+          class="w-full border border-white  text-black rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#a99a68] focus:border-[#a99a68]"
+        >
+          {% for head in dept_heads %}
+            <option class="text-black" value="{{ head.id }}">{{ head.display_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Questions -->
+      <div class="space-y-6">
+        {% for question in questions %}
+          {% set idx = loop.index %}
+
+          <div>
+            <div class="font-semibold text-black mb-3 text-lg">
+              Q{{ idx }}. {{ question }}
+            </div>
+
+            <!-- Card-Style Options -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-{{ scores|length }} gap-4">
+              {% for score in scores %}
+                <label class="cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="q{{ idx }}"
+                    value="{{ score }}"
+                    required
+                    class="peer hidden"
+                  >
+                  <div class="border border-white rounded-xl p-4 h-[120px] text-center transition-all duration-200
+                              peer-checked:border-blue-600 peer-checked:bg-white peer-checked:text-black
+                              hover:border-blue-400 hover:bg-white hover:text-black">
+                    <span class="font-semibold text-black peer-checked:text-black text-lg">{{ score }}</span>
+                    <p class="text-black peer-checked:text-black text-sm mt-1">{{ score_labels[score] }}</p>
+                  </div>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+
         {% endfor %}
-      </select>
-    </div>
+      </div>
 
-    <!-- Questions -->
-    <div class="space-y-6">
-      {% for question in questions %}
-        {% set idx = loop.index %}
+      <!-- Submit Button -->
+      <div class="text-center">
+        <button
+          class="bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold text-lg hover:bg-blue-700 transition"
+        >
+          Submit Survey
+        </button>
+      </div>
 
-        <div class="border-b pb-4">
-          <div class="font-medium text-sm sm:text-base mb-3">
-            Q{{ idx }}. {{ question }}
-          </div>
-
-          <!-- Radio Options -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-{{ scores|length }} gap-3">
-            {% for score in scores %}
-              <label
-                class="flex items-center space-x-2 border rounded px-3 py-2 cursor-pointer hover:bg-gray-50"
-              >
-                <input
-                  type="radio"
-                  name="q{{ idx }}"
-                  value="{{ score }}"
-                  required
-                  class="accent-blue-600"
-                >
-                <span class="text-sm">
-                  {{ score }} – {{ score_labels[score] }}
-                </span>
-              </label>
-            {% endfor %}
-          </div>
-        </div>
-
-      {% endfor %}
-    </div>
-
-    <!-- Submit Button -->
-    <button
-      class="w-full sm:w-auto bg-blue-600 text-white px-6 py-3 rounded font-medium hover:bg-blue-700 transition"
-    >
-      Submit survey
-    </button>
-
-  </form>
+    </form>
+  </div>
 </div>
 
 {% endblock %}
