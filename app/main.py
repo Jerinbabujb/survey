@@ -32,7 +32,7 @@ from fastapi import UploadFile, File, Form, HTTPException
 app = FastAPI(title="Anonymous Survey")
 app.add_middleware(SessionMiddleware, secret_key=settings.secret_key, session_cookie="admin_session", https_only=False)
 
-# app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 
@@ -144,16 +144,17 @@ async def admin_logout(request: Request):
 from sqlalchemy import select, func, distinct
 from app.models import Employee, EmployeeSubmission, SurveyResponse, DepartmentHead
 
+from sqlalchemy import func, distinct, select
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(
     request: Request,
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
-    
-
     # Total employees
     total_employees = await session.scalar(select(func.count(Employee.id)))
+
     # Submitted employees (any submission)
     submitted = await session.scalar(
         select(func.count(distinct(EmployeeSubmission.employee_id)))
@@ -161,30 +162,27 @@ async def admin_dashboard(
     )
     pending = total_employees - submitted
 
-    # Subquery: submitted employees per department
+    # Subquery: number of submitted employees per department
     submitted_subq = (
         select(
-            SurveyResponse.dept_head_id.label("dept_id"),
+            Employee.department.label("department"),
             func.count(distinct(EmployeeSubmission.employee_id)).label("submitted_count")
         )
-        .join(EmployeeSubmission, EmployeeSubmission.submission_hash == SurveyResponse.submission_hash)
-        .join(Employee, Employee.id == EmployeeSubmission.employee_id)
-        .group_by(SurveyResponse.dept_head_id)
+        .join(EmployeeSubmission, EmployeeSubmission.employee_id == Employee.id)
+        .group_by(Employee.department)
         .subquery()
     )
 
     # Department averages
     dept_avg_stmt = (
         select(
-            DepartmentHead.id,
-            DepartmentHead.display_name,
+            SurveyResponse.department,
             func.coalesce(func.avg(SurveyResponse.score), 0).label("avg_score"),
             func.coalesce(submitted_subq.c.submitted_count, 0).label("submitted_count")
         )
-        .outerjoin(SurveyResponse, SurveyResponse.dept_head_id == DepartmentHead.id)
-        .outerjoin(submitted_subq, submitted_subq.c.dept_id == DepartmentHead.id)
-        .group_by(DepartmentHead.id, submitted_subq.c.submitted_count)
-        .order_by(DepartmentHead.display_name)
+        .outerjoin(submitted_subq, submitted_subq.c.department == SurveyResponse.department)
+        .group_by(SurveyResponse.department, submitted_subq.c.submitted_count)
+        .order_by(SurveyResponse.department)
     )
     dept_avgs = (await session.execute(dept_avg_stmt)).all()
 
@@ -278,11 +276,13 @@ async def add_employee(
     request: Request,
     name: str = Form(...),
     email: str = Form(...),
+    department: str= Form(...),
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
     email = email.strip()
     name = name.strip()
+    department = department.strip()
 
     # Check if employee with the same email already exists
     result = await session.execute(select(models.Employee).where(models.Employee.email == email))
@@ -340,7 +340,7 @@ async def add_employee(
         return HTMLResponse(content=html_content)
 
     # Add new employee
-    employee = models.Employee(name=name, email=email)
+    employee = models.Employee(name=name, email=email, department= department)
     session.add(employee)
     await session.commit()
 
@@ -352,6 +352,14 @@ from typing import Optional
 from io import StringIO, TextIOWrapper
 import csv
 
+from fastapi import Request, Form, File, UploadFile, Depends, HTTPException
+from fastapi.responses import RedirectResponse
+from io import StringIO, TextIOWrapper
+import csv
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from typing import Optional
+
 @app.post("/admin/employees/import")
 async def import_employees(
     request: Request,
@@ -360,38 +368,56 @@ async def import_employees(
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
-    # 1️⃣ Choose CSV source
-    if csv_file:
+    # 1️⃣ Determine source
+    if csv_file and csv_file.filename:
         csv_stream = TextIOWrapper(csv_file.file, encoding="utf-8")
-
     elif csv_rows and csv_rows.strip():
         csv_stream = StringIO(csv_rows)
-
     else:
         raise HTTPException(status_code=400, detail="No CSV data provided")
 
-    # 2️⃣ Parse CSV properly
     reader = csv.reader(csv_stream)
+    added_count = 0
+    skipped_count = 0
 
-    for row in reader:
-        if len(row) < 2:
-            continue
+    # 2️⃣ Process CSV rows
+    async with session.begin():  # Ensures proper commit
+        for row in reader:
+            # Skip empty rows
+            if not row or all(cell.strip() == "" for cell in row):
+                continue
 
-        name, email = row[0].strip(), row[1].strip()
-        if not name or not email:
-            continue
+            # Expect exactly 3 columns: Name, Email, Department
+            if len(row) < 3:
+                skipped_count += 1
+                continue
 
-        exists = await session.execute(
-            select(models.Employee).where(models.Employee.email == email)
-        )
-        if exists.scalars().first():
-            continue
+            name, email, department = row[0].strip(), row[1].strip(), row[2].strip()
 
-        session.add(models.Employee(name=name, email=email))
+            if not name or not email or not department:
+                skipped_count += 1
+                continue
 
-    await session.commit()
+            # Check for duplicates
+            existing = await session.execute(
+                select(models.Employee).where(models.Employee.email == email)
+            )
+            if existing.scalars().first():
+                skipped_count += 1
+                continue
 
+            # Add new employee
+            session.add(models.Employee(name=name, email=email, department=department))
+            added_count += 1
+
+    # Optional: Show feedback in admin
+    # You could use query parameters or flash messages
+    print(f"Imported {added_count} employees, skipped {skipped_count} rows.")
+
+    # Redirect back to admin page
     return RedirectResponse(url="/admin/employees", status_code=303)
+
+
 
 
 
@@ -648,19 +674,24 @@ async def test_smtp(
 
 @app.get("/survey/{token}", response_class=HTMLResponse)
 async def survey_page(request: Request, token: str, session: AsyncSession = Depends(get_session)):
+    # Lookup employee by token
     employee = await get_employee_by_token(session, token)
     if not employee or not employee.is_active:
         raise HTTPException(status_code=404, detail="Invite not found")
 
+    # Already submitted
     if employee.submitted_at:
         return templates.TemplateResponse("survey/submitted.html", {"request": request, "employee": employee})
 
-    heads = await session.execute(select(models.DepartmentHead).where(models.DepartmentHead.is_active.is_(True)))
-    dept_heads = heads.scalars().all()
+    # Fetch active department heads
+    result = await session.execute(select(models.DepartmentHead).where(models.DepartmentHead.is_active == True))
+    dept_heads = result.scalars().all()
+
     return templates.TemplateResponse(
         "survey/form.html",
         {
             "request": request,
+            'employee':employee,
             "questions": QUESTIONS,
             "dept_heads": dept_heads,
             "scores": [5, 4, 3, 2, 1],
@@ -676,6 +707,7 @@ async def survey_page(request: Request, token: str, session: AsyncSession = Depe
     )
 
 
+
 async def get_employee_by_token(session: AsyncSession, token: str) -> Optional[models.Employee]:
     token_hash = hash_token(token)
     result = await session.execute(select(models.Employee).where(models.Employee.invite_token_hash == token_hash))
@@ -686,8 +718,7 @@ async def get_employee_by_token(session: AsyncSession, token: str) -> Optional[m
 async def submit_survey(
     request: Request,
     token: str,
-    dept_head_id: int = Form(...),
-    comment: Optional[str] = Form(None),
+    # comment: Optional[str] = Form(None),
     session: AsyncSession = Depends(get_session),
 ):
     # Lookup employee by token
@@ -700,11 +731,6 @@ async def submit_survey(
             "survey/submitted.html", {"request": request, "employee": employee}
         )
 
-    # Validate department head
-    head = await session.get(models.DepartmentHead, dept_head_id)
-    if not head or not head.is_active:
-        raise HTTPException(status_code=400, detail="Invalid department head")
-
     # Collect scores from form
     form_data = await request.form()
     question_scores = []
@@ -716,16 +742,11 @@ async def submit_survey(
             val = None
         if val is None or val not in {1, 2, 3, 4, 5}:
             # Re-render form with error
-            heads = await session.execute(
-                select(models.DepartmentHead).where(models.DepartmentHead.is_active.is_(True))
-            )
-            dept_heads = heads.scalars().all()
             return templates.TemplateResponse(
                 "survey/form.html",
                 {
                     "request": request,
                     "questions": QUESTIONS,
-                    "dept_heads": dept_heads,
                     "scores": [5, 4, 3, 2, 1],
                     "score_labels": {
                         5: "Strongly Agree",
@@ -752,26 +773,29 @@ async def submit_survey(
     # Generate submission hash
     submission_hash = hash_token(str(uuid.uuid4()))
 
+    # Get employee department
+    department = employee.department
+
     # Save survey responses
     for q in question_scores:
         session.add(
             models.SurveyResponse(
                 submission_hash=submission_hash,
-                dept_head_id=dept_head_id,
+                department=department,
                 question_no=q["question_no"],
                 score=q["score"]
             )
         )
 
-    # Save optional comment
-    if comment:
-        session.add(
-            models.SurveyComment(
-                submission_hash=submission_hash,
-                dept_head_id=dept_head_id,
-                comment=comment
-            )
-        )
+    # Optional: Save comment
+    # if comment:
+    #     session.add(
+    #         models.SurveyComment(
+    #             submission_hash=submission_hash,
+    #             department=department,
+    #             comment=comment
+    #         )
+    #     )
 
     # Track employee submission
     session.add(models.EmployeeSubmission(employee_id=employee.id, submission_hash=submission_hash))
@@ -783,6 +807,7 @@ async def submit_survey(
         "survey/submitted.html",
         {"request": request, "employee": employee, "question_scores": question_scores}
     )
+
 
 
 @app.get("/health")

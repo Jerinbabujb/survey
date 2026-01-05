@@ -7,13 +7,16 @@
     <!-- Header -->
     <div class="mb-8 text-center">
       <h1 class="text-2xl sm:text-3xl font-bold text-black mb-2">
-        Department Head Survey
+        Department Survey
       </h1>
       <p class="text-black text-sm sm:text-base leading-relaxed">
         Your responses are anonymous. We do not store your name, email, or any identifier
         with your answers. Completion is tracked only through a one-way hash of a random
         submission ID.
       </p>
+      <h2 class="text-black font-semibold mt-4">
+    Department: {{ employee.department }}
+  </h2>
     </div>
 
     {% if error %}
@@ -23,22 +26,6 @@
     {% endif %}
 
     <form method="post" action="/survey/{{ token }}" target="_blank" class="space-y-8">
-
-      <!-- Department Head Select -->
-      <div>
-        <label class="block text-black font-semibold mb-2">
-          Select Department Head
-        </label>
-        <select
-          name="dept_head_id"
-          required
-          class="w-full border border-white  text-black rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#a99a68] focus:border-[#a99a68]"
-        >
-          {% for head in dept_heads %}
-            <option class="text-black" value="{{ head.id }}">{{ head.display_name }}</option>
-          {% endfor %}
-        </select>
-      </div>
 
       <!-- Questions -->
       <div class="space-y-6">
@@ -79,7 +66,7 @@
       <div class="text-center">
         <button
           class="bg-black text-white px-8 py-3 rounded-xl font-semibold text-lg hover:bg-[#a99a68] transition"
-        onclick="setTimeout(() => { window.close(); }, 100)">
+          onclick="setTimeout(() => { window.close(); }, 100)">
           Submit Survey
         </button>
       </div>

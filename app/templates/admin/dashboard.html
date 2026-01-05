@@ -16,32 +16,33 @@
   </div>
 </div>
 
-<!-- Average Score by Department Head -->
+<!-- Average Score by Department -->
 <div class="bg-white shadow-lg rounded-xl p-6 mb-6">
-  <h2 class="text-xl font-semibold mb-4 text-gray-800">Average Score by Department Head</h2>
+  <h2 class="text-xl font-semibold mb-4 text-gray-800">Average Score by Department</h2>
   <table class="min-w-full text-sm divide-y divide-gray-200">
     <thead>
       <tr class="bg-gray-50 text-left">
-        <th class="py-3 px-4 font-medium text-gray-500">Department Head</th>
+        <th class="py-3 px-4 font-medium text-gray-500">Department</th>
         <th class="py-3 px-4 font-medium text-gray-500">Average Score</th>
         <th class="py-3 px-4 font-medium text-gray-500">Submitted Employees</th>
       </tr>
     </thead>
     <tbody class="divide-y divide-gray-100">
-      {% for head_id, display_name, avg_score, submitted_count in dept_avgs %}
+      {% for department, avg_score, submitted_count in dept_avgs %}
       <tr class="hover:bg-gray-50 transition-colors">
-        <td class="py-3 px-4">{{ display_name }}</td>
+        <td class="py-3 px-4">{{ department }}</td>
         <td class="py-3 px-4">{{ '%.2f'|format(avg_score) if avg_score is not none else '0.00' }}</td>
         <td class="py-3 px-4">{{ submitted_count }}</td>
       </tr>
       {% else %}
-      <!-- <tr>
-        <td class="py-3 px-4 text-gray-400" colspan="2">No submissions yet.</td>
-      </tr> -->
+      <tr>
+        <td class="py-3 px-4 text-gray-400" colspan="3">No submissions yet.</td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+
 
 <!-- Average Score per Question -->
 <!-- <div class="bg-white shadow-lg rounded-xl p-6">

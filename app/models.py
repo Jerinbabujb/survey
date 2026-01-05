@@ -21,6 +21,7 @@ class Employee(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False)
+    department = Column(String(255), nullable=False)
     invite_token_hash = Column(String(128), nullable=True)
     invited_at = Column(DateTime, nullable=True)
     submitted_at = Column(DateTime, nullable=True)
@@ -55,20 +56,20 @@ class SurveyResponse(Base):
 
     id = Column(Integer, primary_key=True)
     submission_hash = Column(String(128), nullable=False)  # <- use hash
-    dept_head_id = Column(Integer, ForeignKey("department_heads.id", ondelete="CASCADE"), nullable=False)
+    department = Column(String(255), nullable=False)
     question_no = Column(Integer, nullable=False)
     score = Column(Integer, nullable=False)
     created_at = Column(DateTime, nullable=False, default=dt.datetime.utcnow)
 
 
-class SurveyComment(Base):
-    __tablename__ = "survey_comments"
+# class SurveyComment(Base):
+#     __tablename__ = "survey_comments"
 
-    id = Column(Integer, primary_key=True)
-    submission_hash = Column(String, nullable=False, index=True)
-    dept_head_id = Column(Integer, ForeignKey("department_heads.id", ondelete="CASCADE"), nullable=False)
-    comment = Column(String, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=dt.datetime.utcnow)
+#     id = Column(Integer, primary_key=True)
+#     submission_hash = Column(String, nullable=False, index=True)
+#     department = Column(String, ForeignKey("employees.department", ondelete="CASCADE"), nullable=False)
+#     comment = Column(String, nullable=True)
+#     created_at = Column(DateTime, nullable=False, default=dt.datetime.utcnow)
 
 
 class SMTPSettings(Base):
