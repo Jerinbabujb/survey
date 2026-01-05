@@ -236,10 +236,8 @@ async def admin_employees(
 
             if responses:
                 
-                for r in responses:
-                    raw_score = int(r.score)
-                    og_value=raw_score/10
-                    score_multiplied = weighted_score(og_value)
+                for r in responses:                    
+                    score_multiplied = r.score
                     question_scores.append({
                         "question_no": r.question_no,
                         "score": score_multiplied,
