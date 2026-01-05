@@ -761,7 +761,7 @@ async def submit_survey(
                 status_code=400,
             )
 
-        scaled_score = val * 10
+        scaled_score = val * 9
         category = get_score_category(scaled_score)
 
         question_scores.append({
