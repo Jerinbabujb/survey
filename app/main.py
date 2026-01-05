@@ -25,6 +25,8 @@ from app.models import Employee, EmployeeSubmission, SurveyResponse
 from app.utils import weighted_score, get_score_category, get_score_category_score
 from sqlalchemy import join
 from sqlalchemy import distinct
+from fastapi import UploadFile, File, Form, HTTPException
+
 
 
 app = FastAPI(title="Anonymous Survey")
@@ -345,26 +347,52 @@ async def add_employee(
     return RedirectResponse(url="/admin/employees", status_code=303)
 
 
+from fastapi import UploadFile, File, Form, HTTPException
+from typing import Optional
+from io import StringIO, TextIOWrapper
+import csv
+
 @app.post("/admin/employees/import")
 async def import_employees(
     request: Request,
-    csv_rows: str = Form(...),
+    csv_rows: Optional[str] = Form(default=None),
+    csv_file: Optional[UploadFile] = File(default=None),
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
-    lines = [line.strip() for line in csv_rows.splitlines() if line.strip()]
-    for line in lines:
-        if "," not in line:
+    # 1️⃣ Choose CSV source
+    if csv_file:
+        csv_stream = TextIOWrapper(csv_file.file, encoding="utf-8")
+
+    elif csv_rows and csv_rows.strip():
+        csv_stream = StringIO(csv_rows)
+
+    else:
+        raise HTTPException(status_code=400, detail="No CSV data provided")
+
+    # 2️⃣ Parse CSV properly
+    reader = csv.reader(csv_stream)
+
+    for row in reader:
+        if len(row) < 2:
             continue
-        name, email = [part.strip() for part in line.split(",", 1)]
+
+        name, email = row[0].strip(), row[1].strip()
         if not name or not email:
             continue
-        exists = await session.execute(select(models.Employee).where(models.Employee.email == email))
+
+        exists = await session.execute(
+            select(models.Employee).where(models.Employee.email == email)
+        )
         if exists.scalars().first():
             continue
+
         session.add(models.Employee(name=name, email=email))
+
     await session.commit()
+
     return RedirectResponse(url="/admin/employees", status_code=303)
+
 
 
 async def invite_employee(session: AsyncSession, employee: models.Employee, smtp: models.SMTPSettings, base_url: str) -> None:
