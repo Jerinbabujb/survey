@@ -220,6 +220,8 @@ async def admin_employees(
     skipped: int | None = None,
     added_single: int | None = None,
     invited: int | None = None,
+    invited_count: int | None = None,
+    reminded: int | None = None, 
 ):
     result = await session.execute(
         select(Employee).options(selectinload(Employee.submissions))
@@ -270,6 +272,8 @@ async def admin_employees(
             "skipped": skipped,     
             "added_single": added_single,     
             "invited": invited,  
+            "invited_count": invited_count, 
+            "reminded": reminded,  
         },
     )
 
@@ -477,16 +481,16 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
                           font-size:16px;
                           border-radius:6px;
                           display:inline-block;">
-                  {link}
+                  Start Survey
                 </a>
               </div>
 
               <p style="font-size:14px; color:#000000; line-height:1.6;">
-                If the button above doesn’t work, click the hyperlink below:
+                If the button above doesn’t work, please copy the link below and paste it into your web browser:
               </p>
 
               <p style="font-size:14px; word-break:break-all;">
-                <a href="{link}" style="color:#000000; text-decoration:underline;">Click here to start the survey</a>
+                <a href="{link}" style="color:#000000; text-decoration:underline;">{link}</a>
               </p>
 
               <p style="font-size:14px; color:#000000; line-height:1.6; margin-bottom:0;">
@@ -559,31 +563,78 @@ async def toggle_employee(
 
 
 @app.post("/admin/send-invites")
-async def send_invites(request: Request, session: AsyncSession = Depends(get_session), admin_id: int = Depends(require_admin)):
+async def send_invites(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    admin_id: int = Depends(require_admin),
+):
     smtp = await get_smtp(session)
     base_url = str(request.base_url).rstrip("/")
+
     result = await session.execute(
-        select(models.Employee).where(and_(models.Employee.is_active.is_(True), models.Employee.submitted_at.is_(None)))
+        select(models.Employee).where(
+            and_(
+                models.Employee.is_active.is_(True),
+                models.Employee.submitted_at.is_(None),
+            )
+        )
     )
     employees = result.scalars().all()
+
+    invited_count = 0
+    skipped_count = 0
+
     for employee in employees:
+        # Skip already invited employees
+        if employee.invited_at:
+            skipped_count += 1
+            continue
+
         await invite_employee(session, employee, smtp, base_url)
+        invited_count += 1
+
     await session.commit()
-    return RedirectResponse(url="/admin/employees?invited=1", status_code=303)
+
+    return RedirectResponse(
+        url=f"/admin/employees?invited=1&invited_count={invited_count}&skipped={skipped_count}",
+        status_code=303,
+    )
+
 
 
 @app.post("/admin/send-reminders")
-async def send_reminders(request: Request, session: AsyncSession = Depends(get_session), admin_id: int = Depends(require_admin)):
+async def send_reminders(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    admin_id: int = Depends(require_admin),
+):
     smtp = await get_smtp(session)
     base_url = str(request.base_url).rstrip("/")
+
     result = await session.execute(
-        select(models.Employee).where(and_(models.Employee.submitted_at.is_(None), models.Employee.is_active.is_(True)))
+        select(models.Employee).where(
+            and_(
+                models.Employee.submitted_at.is_(None),
+                models.Employee.is_active.is_(True),
+                models.Employee.invited_at.is_not(None),
+            )
+        )
     )
     employees = result.scalars().all()
+
+    invited_count = 0
+
     for employee in employees:
         await invite_employee(session, employee, smtp, base_url)
+        invited_count += 1
+
     await session.commit()
-    return RedirectResponse(url="/admin/employees", status_code=303)
+
+    return RedirectResponse(
+        url=f"/admin/employees?reminded=1&invited_count={invited_count}",
+        status_code=303,
+    )
+
 
 
 @app.get("/admin/department-heads", response_class=HTMLResponse)
