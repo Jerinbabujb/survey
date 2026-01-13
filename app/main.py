@@ -215,6 +215,11 @@ async def admin_dashboard(
 async def admin_employees(
     request: Request,
     session: AsyncSession = Depends(get_session),
+    imported: int | None = None,
+    added: int | None = None,
+    skipped: int | None = None,
+    added_single: int | None = None,
+    invited: int | None = None,
 ):
     result = await session.execute(
         select(Employee).options(selectinload(Employee.submissions))
@@ -260,7 +265,11 @@ async def admin_employees(
             "employees": employees,
             "score":weighted_score,
             "questions": QUESTIONS,
-            
+            "imported": imported,
+            "added": added,
+            "skipped": skipped,     
+            "added_single": added_single,     
+            "invited": invited,  
         },
     )
 
@@ -342,7 +351,7 @@ async def add_employee(
     session.add(employee)
     await session.commit()
 
-    return RedirectResponse(url="/admin/employees", status_code=303)
+    return RedirectResponse(url="/admin/employees?added_single=1", status_code=303)
 
 
 from fastapi import UploadFile, File, Form, HTTPException
@@ -413,7 +422,7 @@ async def import_employees(
     print(f"Imported {added_count} employees, skipped {skipped_count} rows.")
 
     # Redirect back to admin page
-    return RedirectResponse(url="/admin/employees", status_code=303)
+    return RedirectResponse(url=f"/admin/employees?imported=1&added={added_count}&skipped={skipped_count}", status_code=303)
 
 
 
@@ -560,7 +569,7 @@ async def send_invites(request: Request, session: AsyncSession = Depends(get_ses
     for employee in employees:
         await invite_employee(session, employee, smtp, base_url)
     await session.commit()
-    return RedirectResponse(url="/admin/employees", status_code=303)
+    return RedirectResponse(url="/admin/employees?invited=1", status_code=303)
 
 
 @app.post("/admin/send-reminders")

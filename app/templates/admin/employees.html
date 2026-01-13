@@ -1,5 +1,95 @@
 {% extends 'admin/base.html' %}
 {% block content %}
+{% if imported %}
+<div class="mb-6 rounded-xl border border-green-300 bg-green-50 px-6 py-4 text-green-800 shadow-md">
+  <div class="flex items-start justify-between">
+    <div>
+      <h3 class="text-lg font-bold">Import Successful</h3>
+      <p class="text-sm mt-1">
+        {{ added }} employees imported
+        {% if skipped and skipped > 0 %}
+          · {{ skipped }} rows skipped
+        {% endif %}
+      </p>
+      <p class="text-sm mt-1 font-medium">
+        Please send invites.
+      </p>
+    </div>
+
+    <button
+      onclick="this.parentElement.parentElement.remove()"
+      class="text-green-700 hover:text-green-900 text-xl font-bold leading-none"
+      aria-label="Close"
+    >
+      &times;
+    </button>
+  </div>
+
+  <div class="mt-4">
+    <form method="post" action="/admin/send-invites">
+      <button
+        class="bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-[#9c8f5f] transition-colors"
+      >
+        Send Invites Now
+      </button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% if added_single %}
+<div class="mb-6 rounded-xl border border-green-300 bg-green-50 px-6 py-4 text-green-800 shadow-md">
+  <div class="flex items-start justify-between">
+    <div>
+      <h3 class="text-lg font-bold">Employee Added</h3>
+      <p class="text-sm mt-1">
+        Employee added successfully.
+      </p>
+      <p class="text-sm mt-1 font-medium">
+        Please send invite.
+      </p>
+    </div>
+
+    <button
+      onclick="this.parentElement.parentElement.remove()"
+      class="text-green-700 hover:text-green-900 text-xl font-bold leading-none"
+    >
+      &times;
+    </button>
+  </div>
+
+  <div class="mt-4">
+    <form method="post" action="/admin/send-invites">
+      <button
+        class="bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-[#9c8f5f] transition-colors"
+      >
+        Send Invite Now
+      </button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% if invited %}
+<div class="mb-6 rounded-xl border border-blue-300 bg-blue-50 px-6 py-4 text-blue-800 shadow-md">
+  <div class="flex items-start justify-between">
+    <div>
+      <h3 class="text-lg font-bold">Invites Sent</h3>
+      <p class="text-sm mt-1">
+        Employees invited successfully.
+      </p>
+    </div>
+
+    <button
+      onclick="this.parentElement.parentElement.remove()"
+      class="text-blue-700 hover:text-blue-900 text-xl font-bold leading-none"
+    >
+      &times;
+    </button>
+  </div>
+</div>
+{% endif %}
+
+
+
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
   <!-- Add Employee -->
