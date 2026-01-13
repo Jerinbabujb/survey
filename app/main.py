@@ -477,7 +477,7 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
                           font-size:16px;
                           border-radius:6px;
                           display:inline-block;">
-                  Start Survey
+                  {link}
                 </a>
               </div>
 
