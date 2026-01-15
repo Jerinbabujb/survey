@@ -1,24 +1,33 @@
 {% extends 'admin/base.html' %}
 {% block content %}
+
+{% if not survey_stats %}
+<p class="text-center text-gray-500 mt-6">No surveys assigned yet.</p>
+{% endif %}
+
+{% for survey_name, stats in survey_stats.items() %}
+<!-- Survey Header -->
+<h2 class="text-2xl font-semibold mb-4 mt-8 text-gray-800">{{ survey_name }}</h2>
+
 <!-- Stats Cards -->
 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-6">
   <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
     <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Total Employees</div>
-    <div class="text-3xl font-bold text-gray-800">{{ counts.total }}</div>
+    <div class="text-3xl font-bold text-gray-800">{{ stats.total }}</div>
   </div>
   <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
     <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Submitted</div>
-    <div class="text-3xl font-bold text-green-600">{{ counts.submitted }}</div>
+    <div class="text-3xl font-bold text-green-600">{{ stats.submitted }}</div>
   </div>
   <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
     <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Pending</div>
-    <div class="text-3xl font-bold text-amber-600">{{ counts.pending }}</div>
+    <div class="text-3xl font-bold text-amber-600">{{ stats.pending }}</div>
   </div>
 </div>
 
 <!-- Average Score by Department -->
 <div class="bg-white shadow-lg rounded-xl p-6 mb-6">
-  <h2 class="text-xl font-semibold mb-4 text-gray-800">Average Score by Department</h2>
+  <h3 class="text-xl font-semibold mb-4 text-gray-800">Average Score by Department</h3>
   <table class="min-w-full text-sm divide-y divide-gray-200">
     <thead>
       <tr class="bg-gray-50 text-left">
@@ -28,10 +37,10 @@
       </tr>
     </thead>
     <tbody class="divide-y divide-gray-100">
-      {% for department, avg_score, submitted_count in dept_avgs %}
+      {% for department, avg_score, submitted_count in stats.dept_avgs %}
       <tr class="hover:bg-gray-50 transition-colors">
         <td class="py-3 px-4">{{ department }}</td>
-        <td class="py-3 px-4">{{ '%.2f'|format(avg_score) if avg_score is not none else '0.00' }}</td>
+        <td class="py-3 px-4">{{ '%.2f'|format(avg_score) }}</td>
         <td class="py-3 px-4">{{ submitted_count }}</td>
       </tr>
       {% else %}
@@ -43,14 +52,13 @@
   </table>
 </div>
 
-
 <!-- Average Score per Question -->
-<!-- <div class="bg-white shadow-lg rounded-xl p-6">
-  <h2 class="text-xl font-semibold mb-4 text-gray-800">Average Score per Question</h2>
+<div class="bg-white shadow-lg rounded-xl p-6 mb-6">
+  <h3 class="text-xl font-semibold mb-4 text-gray-800">Average Score per Question</h3>
   <div class="space-y-4">
-    {% for question_no, avg_score in question_avgs %}
+    {% for question_no, avg_score in stats.question_avgs %}
     <div class="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-      <div class="font-medium text-gray-800">Q{{ question_no }}. {{ questions[question_no-1] }}</div>
+      <div class="font-medium text-gray-800">Q{{ question_no }}. {{ stats.questions[question_no-1] }}</div>
       <div class="text-sm text-gray-600">Average: {{ '%.2f'|format(avg_score) }}</div>
     </div>
     {% else %}
@@ -58,4 +66,6 @@
     {% endfor %}
   </div>
 </div>
-{% endblock %} -->
+
+{% endfor %}
+{% endblock %}

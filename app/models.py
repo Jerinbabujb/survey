@@ -1,7 +1,7 @@
 import datetime as dt
 import uuid
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import relationship
 from app.db import Base
 
@@ -22,6 +22,8 @@ class Employee(Base):
     name = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False)
     department = Column(String(255), nullable=False)
+    position= Column(String(255), nullable=False) 
+    survey_names = Column(ARRAY(String(255)), nullable=True)
     invite_token_hash = Column(String(128), nullable=True)
     invited_at = Column(DateTime, nullable=True)
     submitted_at = Column(DateTime, nullable=True)

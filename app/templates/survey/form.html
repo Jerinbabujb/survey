@@ -7,7 +7,7 @@
     <!-- Header -->
     <div class="mb-8 text-center">
       <h1 class="text-2xl sm:text-3xl font-bold text-black mb-2">
-        Department Survey
+        {{ current_survey_name }}
       </h1>
       <p class="text-black text-sm sm:text-base leading-relaxed">
         Your responses are anonymous. We do not store your name, email, or any identifier
@@ -15,8 +15,13 @@
         submission ID.
       </p>
       <h2 class="text-black font-semibold mt-4">
-    Department: {{ employee.department }}
-  </h2>
+        Department: {{ employee.department }}
+      </h2>
+      {% if total_surveys and total_surveys > 1 %}
+        <p class="text-black text-sm mt-1">
+          Survey {{ survey_index + 1 }} of {{ total_surveys }}
+        </p>
+      {% endif %}
     </div>
 
     {% if error %}
@@ -25,20 +30,22 @@
       </div>
     {% endif %}
 
-    <form method="post" action="/survey/{{ token }}" target="_blank" class="space-y-8">
+    <form method="post" action="/survey/{{ token }}" class="space-y-8">
+      <!-- Hidden fields to track survey -->
+      <input type="hidden" name="survey_names" value="{{ survey_names }}">
+      <input type="hidden" name="survey_index" value="{{ survey_index }}">
 
       <!-- Questions -->
       <div class="space-y-6">
         {% for question in questions %}
           {% set idx = loop.index %}
-
           <div>
             <div class="font-semibold text-black mb-3 text-lg">
               Q{{ idx }}. {{ question }}
             </div>
 
             <!-- Card-Style Options -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-{{ scores|length }} gap-4 ">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-{{ scores|length }} gap-4">
               {% for score in scores %}
                 <label class="cursor-pointer group">
                   <input
@@ -50,7 +57,7 @@
                   >
                   <div class="border border-white rounded-xl p-4 h-[100px] sm:h-[120px] text-center transition-all duration-200
                               peer-checked:border-blue-600 peer-checked:bg-white peer-checked:text-black
-                              hover:border-blue-400 hover:bg-white hover:text-black ">
+                              hover:border-blue-400 hover:bg-white hover:text-black">
                     <span class="font-semibold text-black peer-checked:text-black text-lg">{{ score }}</span>
                     <p class="text-black peer-checked:text-black text-sm mt-1">{{ score_labels[score] }}</p>
                   </div>
@@ -58,16 +65,19 @@
               {% endfor %}
             </div>
           </div>
-
         {% endfor %}
       </div>
 
       <!-- Submit Button -->
       <div class="text-center">
         <button
-          class="bg-black text-white px-8 py-3 rounded-xl font-semibold text-lg hover:bg-[#a99a68] transition"
-          onclick="setTimeout(() => { window.close(); }, 100)">
-          Submit Survey
+          type="submit"
+          class="bg-black text-white px-8 py-3 rounded-xl font-semibold text-lg hover:bg-[#a99a68] transition">
+          {% if survey_index + 1 < total_surveys %}
+            Submit & Next Survey
+          {% else %}
+            Submit Survey
+          {% endif %}
         </button>
       </div>
 
