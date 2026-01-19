@@ -181,6 +181,7 @@ async def admin_dashboard(
             "total": total_for_survey,
             "submitted": 0,
             "pending": 0,
+            "overall_avg": 0,
             "dept_avgs": [],
             "question_avgs": [],
             "questions": questions_list,
@@ -228,6 +229,14 @@ async def admin_dashboard(
     for survey_name, stats in survey_stats.items():
         if not survey_hashes[survey_name]:
             continue  # skip if no submissions
+
+        # Overall survey average
+        overall_avg_stmt = (
+          select(func.coalesce(func.avg(SurveyResponse.score), 0))
+          .where(SurveyResponse.submission_hash.in_(survey_hashes[survey_name]))
+        
+        )
+        stats["overall_avg"] = round((await session.scalar(overall_avg_stmt)) or 0 ,2)
 
         # Department averages
         dept_avg_stmt = (

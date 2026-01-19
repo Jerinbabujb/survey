@@ -10,7 +10,7 @@
 <h2 class="text-2xl font-semibold mb-4 mt-8 text-gray-800">{{ survey_name }}</h2>
 
 <!-- Stats Cards -->
-<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-6">
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
   <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
     <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Total Employees</div>
     <div class="text-3xl font-bold text-gray-800">{{ stats.total }}</div>
@@ -22,6 +22,10 @@
   <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
     <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Pending</div>
     <div class="text-3xl font-bold text-amber-600">{{ stats.pending }}</div>
+  </div>
+  <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
+    <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Pending</div>
+    <div class="text-3xl font-bold text-black-600">{{ stats.overall_avg }}</div>
   </div>
 </div>
 
@@ -53,19 +57,47 @@
 </div>
 
 <!-- Average Score per Question -->
+<!-- Average Score per Question (Toggle) -->
 <div class="bg-white shadow-lg rounded-xl p-6 mb-6">
-  <h3 class="text-xl font-semibold mb-4 text-gray-800">Average Score per Question</h3>
-  <div class="space-y-4">
+  <button
+    type="button"
+    class="w-full flex justify-between items-center text-xl font-semibold text-gray-800 focus:outline-none"
+    onclick="toggleQuestions('{{ loop.index }}')"
+  >
+    <span>Average Score per Question</span>
+    <span id="icon-{{ loop.index }}" class="text-gray-500">+</span>
+  </button>
+
+  <div id="questions-{{ loop.index }}" class="hidden mt-4 space-y-4">
     {% for question_no, avg_score in stats.question_avgs %}
     <div class="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-      <div class="font-medium text-gray-800">Q{{ question_no }}. {{ stats.questions[question_no-1] }}</div>
-      <div class="text-sm text-gray-600">Average: {{ '%.2f'|format(avg_score) }}</div>
+      <div class="font-medium text-gray-800">
+        Q{{ question_no }}. {{ stats.questions[question_no-1] }}
+      </div>
+      <div class="text-sm text-gray-600">
+        Average: {{ '%.2f'|format(avg_score) }}
+      </div>
     </div>
     {% else %}
     <p class="text-sm text-gray-400">No responses yet.</p>
     {% endfor %}
   </div>
 </div>
+<script>
+  function toggleQuestions(index) {
+    const content = document.getElementById(`questions-${index}`);
+    const icon = document.getElementById(`icon-${index}`);
+
+    if (content.classList.contains("hidden")) {
+      content.classList.remove("hidden");
+      icon.textContent = "−";
+    } else {
+      content.classList.add("hidden");
+      icon.textContent = "+";
+    }
+  }
+</script>
+
 
 {% endfor %}
 {% endblock %}
