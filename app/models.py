@@ -21,18 +21,16 @@ class Employee(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False)
-    manager_names = Column(ARRAY(String(255)), nullable=True)
-    manager_emails = Column(ARRAY(String(255)), nullable=True)
     department = Column(String(255), nullable=False)
     position= Column(String(255), nullable=False) 
-    survey_names = Column(ARRAY(String(255)), nullable=True)
-    invite_token_hash = Column(String(128), nullable=True)
-    invited_at = Column(DateTime, nullable=True)
-    submitted_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow, nullable=False)
 
-    assignments = relationship("SurveyAssignment", back_populates="employee", cascade="all, delete-orphan")
-    submissions = relationship("EmployeeSubmission", back_populates="employee")
+    assignments = relationship(
+        "SurveyAssignment",
+        back_populates="employee",
+        cascade="all, delete-orphan",
+    )
 
 class SurveyAssignment(Base):
     """Tracks individual invitations for each manager"""
@@ -42,15 +40,16 @@ class SurveyAssignment(Base):
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
     manager_email = Column(String(255), nullable=False)
     manager_name = Column(String(255), nullable=False)
-    
+    survey_name = Column(String(50), nullable=False)
     # Each manager gets their own unique token
     invite_token_hash = Column(String(128), unique=True, nullable=False)
+    invited_at = Column(DateTime, default=dt.datetime.utcnow)
     is_submitted = Column(Boolean, default=False)
     submitted_at = Column(DateTime, nullable=True)
 
     employee = relationship("Employee", back_populates="assignments")
     __table_args__ = (
-        UniqueConstraint("employee_id", "manager_email", name="uq_emp_mgr_assignment"),
+        UniqueConstraint("employee_id", "manager_email", "survey_name", name="uq_emp_mgr_assignment"),
     )
 
 class DepartmentHead(Base):
@@ -67,12 +66,13 @@ class EmployeeSubmission(Base):
 
     id = Column(Integer, primary_key=True)
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    survey_name = Column(String(50), nullable=False)
     manager_email = Column(String(255), nullable=False)
     submission_hash = Column(String(128), nullable=False)
     submitted_at = Column(DateTime, nullable=False, default=dt.datetime.utcnow)
 
-    employee = relationship("Employee", back_populates="submissions")
-    __table_args__ = (UniqueConstraint("employee_id", "submission_hash", name="uq_employee_submission"),)
+   
+    __table_args__ = (UniqueConstraint("employee_id", "submission_hash", "survey_name", name="uq_employee_submission"),)
 
 
 class SurveyResponse(Base):
@@ -80,6 +80,7 @@ class SurveyResponse(Base):
 
     id = Column(Integer, primary_key=True)
     submission_hash = Column(String(128), nullable=False)  # <- use hash
+    survey_name = Column(String(50), nullable=False)
     department = Column(String(255), nullable=False)
     question_no = Column(Integer, nullable=False)
     score = Column(Integer, nullable=False)

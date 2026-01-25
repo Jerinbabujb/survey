@@ -38,12 +38,38 @@ TEAM_QNS=[
     "Do you have the required resources within the department for completion of tasks?",
 ]
 
-SURVEY_MAPPING = {
-    "MSES": QUESTIONS,
-    "ICSES": CLIENT_QNS,
-    "TSES": TEAM_QNS,
+SURVEY_DETAILS = {
+    "MSES": {
+        "full_name": "Management Satisfaction Survey",
+        "questions": QUESTIONS
+    },
+    "ICSES": {
+        "full_name": "Internal Customer Satisfaction Survey",
+        "questions": CLIENT_QNS
+    },
+    "TSES": {
+        "full_name": "Team Satisfaction Survey",
+        "questions": TEAM_QNS
+    }
 }
 
+def normalize_survey_name(input_name: str) -> str:
+    """Standardizes input to MSES, ICSES, or TSES."""
+    if not input_name: return ""
+    name = input_name.strip().upper()
+    
+    # Check short codes
+    if name in SURVEY_DETAILS:
+        return name
+        
+    # Check full names
+    for key, data in SURVEY_DETAILS.items():
+        if name == data["full_name"].upper():
+            return key
+    return name
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
 SCORES = {
     5: "Strongly Agree",
     4: "Agree",

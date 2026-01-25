@@ -2,87 +2,136 @@
 {% block content %}
 
 {% if not survey_stats %}
-<p class="text-center text-gray-500 mt-6">No surveys assigned yet.</p>
+<div class="flex flex-col items-center justify-center py-20">
+    <div class="text-6xl mb-4">📊</div>
+    <p class="text-center text-gray-500 font-medium">No survey data available yet.</p>
+</div>
 {% endif %}
 
 {% for survey_name, stats in survey_stats.items() %}
-<!-- Survey Header -->
-<h2 class="text-2xl font-semibold mb-4 mt-8 text-gray-800">{{ survey_name }}</h2>
+<div class="mb-16">
+    <h2 class="text-2xl font-black mb-6 text-gray-800 border-b-4 border-[#a99a68] pb-2 inline-block">
+        {{ stats.display_name }}
+    </h2>
 
-<!-- Stats Cards -->
-<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-  <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
-    <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Total Employees</div>
-    <div class="text-3xl font-bold text-gray-800">{{ stats.total }}</div>
-  </div>
-  <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
-    <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Submitted</div>
-    <div class="text-3xl font-bold text-green-600">{{ stats.submitted }}</div>
-  </div>
-  <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
-    <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Pending</div>
-    <div class="text-3xl font-bold text-amber-600">{{ stats.pending }}</div>
-  </div>
-  <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow">
-    <div class="text-gray-400 uppercase text-xs font-semibold mb-2">Average</div>
-    <div class="text-3xl font-bold text-[#a99a68]">{{ stats.overall_avg }}</div>
-  </div>
-</div>
-
-<!-- Average Score by Department -->
-<div class="bg-white shadow-lg rounded-xl p-6 mb-6">
-  <h3 class="text-xl font-semibold mb-4 text-gray-800">Average Score by Department</h3>
-  <table class="min-w-full text-sm divide-y divide-gray-200">
-    <thead>
-      <tr class="bg-gray-50 text-left">
-        <th class="py-3 px-4 font-medium text-gray-500">Department</th>
-        <th class="py-3 px-4 font-medium text-gray-500">Average Score</th>
-        <th class="py-3 px-4 font-medium text-gray-500">Submitted Employees</th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-gray-100">
-      {% for department, avg_score, submitted_count in stats.dept_avgs %}
-      <tr class="hover:bg-gray-50 transition-colors">
-        <td class="py-3 px-4">{{ department }}</td>
-        <td class="py-3 px-4">{{ '%.2f'|format(avg_score) }}</td>
-        <td class="py-3 px-4">{{ submitted_count }}</td>
-      </tr>
-      {% else %}
-      <tr>
-        <td class="py-3 px-4 text-gray-400" colspan="3">No submissions yet.</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-
-<!-- Average Score per Question -->
-<!-- Average Score per Question (Toggle) -->
-<div class="bg-white shadow-lg rounded-xl p-6 mb-6">
-  <button
-    type="button"
-    class="w-full flex justify-between items-center text-xl font-semibold text-gray-800 focus:outline-none"
-    onclick="toggleQuestions('{{ loop.index }}')"
-  >
-    <span>Average Score per Question</span>
-    <span id="icon-{{ loop.index }}" class="text-gray-500">+</span>
-  </button>
-
-  <div id="questions-{{ loop.index }}" class="hidden mt-4 space-y-4">
-    {% for question_no, avg_score in stats.question_avgs %}
-    <div class="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-      <div class="font-medium text-gray-800">
-        Q{{ question_no }}. {{ stats.questions[question_no-1] }}
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+      <div class="bg-white shadow-lg rounded-xl p-6 border-l-4 border-gray-400 transform transition hover:scale-105">
+        <div class="text-gray-400 uppercase text-[10px] font-bold tracking-widest mb-2">Unique Employees</div>
+        <div class="text-3xl font-black text-gray-800">{{ stats.total_employees }}</div>
       </div>
-      <div class="text-sm text-gray-600">
-        Average: {{ '%.2f'|format(avg_score) }}
+      
+      <div class="bg-white shadow-lg rounded-xl p-6 border-l-4 border-emerald-500 transform transition hover:scale-105">
+        <div class="text-gray-400 uppercase text-[10px] font-bold tracking-widest mb-2">Employees Evaluated</div>
+        <div class="text-3xl font-black text-emerald-600">{{ stats.submitted_employees }}</div>
+      </div>
+      
+      <div class="bg-white shadow-lg rounded-xl p-6 border-l-4 border-amber-500 transform transition hover:scale-105">
+        <div class="text-gray-400 uppercase text-[10px] font-bold tracking-widest mb-2">Pending Evaluation</div>
+        <div class="text-3xl font-black text-amber-600">{{ stats.pending_employees }}</div>
+      </div>
+      
+      <div class="bg-white shadow-lg rounded-xl p-6 border-l-4 border-[#a99a68] transform transition hover:scale-105">
+        <div class="text-gray-400 uppercase text-[10px] font-bold tracking-widest mb-2">Average Score</div>
+        <div class="text-3xl font-black text-[#a99a68]">{{ '%.2f'|format(stats.overall_avg) }}</div>
       </div>
     </div>
-    {% else %}
-    <p class="text-sm text-gray-400">No responses yet.</p>
-    {% endfor %}
-  </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div class="bg-white shadow-xl rounded-2xl p-6 border border-gray-100">
+          <h3 class="text-lg font-bold mb-6 text-gray-800 flex items-center gap-2">
+              <span class="w-3 h-3 bg-blue-500 rounded-full shadow-sm"></span> Performance by Department
+          </h3>
+          <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead>
+                  <tr class="text-left text-gray-400 border-b border-gray-50">
+                    <th class="pb-3 font-bold uppercase text-[10px]">Department</th>
+                    <th class="pb-3 font-bold uppercase text-[10px] text-right">Avg Score</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                  {% for department, avg_score in stats.dept_avgs %}
+                  <tr class="hover:bg-blue-50/50 transition-colors">
+                    <td class="py-4 font-semibold text-gray-700">{{ department }}</td>
+                    <td class="py-4 text-right">
+                        <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg font-black">{{ '%.2f'|format(avg_score) }}</span>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+          </div>
+        </div>
+
+        <div class="bg-white shadow-xl rounded-2xl p-6 border border-gray-100">
+          <h3 class="text-lg font-bold mb-6 text-gray-800 flex items-center gap-2">
+              <span class="w-3 h-3 bg-purple-500 rounded-full shadow-sm"></span> Performance by Position
+          </h3>
+          <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead>
+                  <tr class="text-left text-gray-400 border-b border-gray-50">
+                    <th class="pb-3 font-bold uppercase text-[10px]">Position</th>
+                    <th class="pb-3 font-bold uppercase text-[10px] text-right">Avg Score</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                  {% for row in stats.pos_avgs %}
+                  <tr class="hover:bg-purple-50/50 transition-colors">
+                    <td class="py-4 font-semibold text-gray-700">{{ row.position }}</td>
+                    <td class="py-4 text-right">
+                        <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg font-black">{{ '%.2f'|format(row.avg_score) }}</span>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+          </div>
+        </div>
+    </div>
+
+    <div class="bg-white shadow-xl rounded-2xl p-2 border border-gray-100 overflow-hidden">
+      <button
+        type="button"
+        class="w-full flex justify-between items-center p-6 text-lg font-black text-gray-800 focus:outline-none hover:bg-gray-50 transition-colors"
+        onclick="toggleQuestions('{{ loop.index }}')"
+      >
+        <span class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-[#a99a68]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+            Detailed Question Breakdown
+        </span>
+        <span id="icon-{{ loop.index }}" class="bg-gray-800 text-white w-8 h-8 flex items-center justify-center rounded-full text-xl transition-transform duration-300 shadow-lg">+</span>
+      </button>
+
+      <div id="questions-{{ loop.index }}" class="hidden px-6 pb-6 space-y-4 animate-fade-in">
+        {% for q in stats.question_avgs %}
+        <div class="p-5 bg-gray-50 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 border border-gray-100">
+          <div class="flex-grow">
+            <span class="text-[10px] font-black text-gray-400 uppercase block mb-1">Question {{ q.question_no }}</span>
+            <div class="font-bold text-gray-800 text-sm leading-snug max-w-2xl">
+              {{ stats.questions[q.question_no-1] }}
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-4 min-w-[220px] justify-end">
+            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter
+                {% if q.category == 'Outstanding' %} bg-blue-600 text-white
+                {% elif q.category == 'Exceeds Target' %} bg-emerald-500 text-white
+                {% elif q.category == 'Meets Target' %} bg-amber-400 text-white
+                {% else %} bg-rose-500 text-white {% endif %} shadow-sm">
+                {{ q.category }}
+            </span>
+            <div class="text-2xl font-black text-gray-900 w-16 text-right">
+              {{ '%.2f'|format(q.avg_score) }}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
 </div>
+{% endfor %}
+
 <script>
   function toggleQuestions(index) {
     const content = document.getElementById(`questions-${index}`);
@@ -91,13 +140,23 @@
     if (content.classList.contains("hidden")) {
       content.classList.remove("hidden");
       icon.textContent = "−";
+      icon.style.transform = "rotate(180deg)";
     } else {
       content.classList.add("hidden");
       icon.textContent = "+";
+      icon.style.transform = "rotate(0deg)";
     }
   }
 </script>
 
+<style>
+    @keyframes fade-in {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+        animation: fade-in 0.3s ease-out forwards;
+    }
+</style>
 
-{% endfor %}
 {% endblock %}

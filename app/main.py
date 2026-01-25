@@ -20,7 +20,7 @@ from app.config import settings
 from app.db import Base, engine, get_session
 from app.email import send_email
 from app.security import get_password_hash, hash_token, verify_password
-from app.utils import QUESTIONS,hash_token, get_score_category,  CLIENT_QNS, TEAM_QNS, SCORES, management_score_category, management_score_description, client_score_category, client_score_description, team_score_category, team_score_description, SURVEY_MAPPING
+from app.utils import QUESTIONS,hash_token, get_score_category,  CLIENT_QNS, TEAM_QNS, SCORES, management_score_category, management_score_description, client_score_category, client_score_description, team_score_category, team_score_description
 from fastapi import Query
 
 from app.models import Employee, EmployeeSubmission, SurveyResponse
@@ -154,126 +154,147 @@ from app.models import Employee, EmployeeSubmission, SurveyResponse, DepartmentH
 
 from sqlalchemy import func, distinct, select
 
+from app.utils import SURVEY_DETAILS, management_score_category, client_score_category, team_score_category
+
+from sqlalchemy import or_
+
+from sqlalchemy import select, func, or_
+from app.utils import SURVEY_DETAILS, normalize_survey_name
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(
     request: Request,
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
-    # Define surveys and their question lists
-    SURVEYS = {
-        "MSES": QUESTIONS,
-        "ICSES": CLIENT_QNS,
-        "TSES": TEAM_QNS,
-    }
-
     survey_stats = {}
-    survey_name_display=''
-    # Loop over each survey
-    for survey_name, questions_list in SURVEYS.items():
-        # Count employees who actually have this survey assigned
-        stmt_total = select(func.count(Employee.id)).where(
-            Employee.survey_names.contains([survey_name])  # assuming survey_names is list/array
+    
+    # 1. Initialize stats using Distinct Employee IDs
+    for s_key, s_info in SURVEY_DETAILS.items():
+        # Count unique employees assigned to this survey type (Short Code OR Full Name)
+        stmt_total = select(func.count(func.distinct(models.SurveyAssignment.employee_id))).where(
+            or_(
+                models.SurveyAssignment.survey_name == s_key,
+                models.SurveyAssignment.survey_name == s_info["full_name"]
+            )
         )
-        total_for_survey = await session.scalar(stmt_total)
-        if total_for_survey == 0:
-            continue  # skip surveys not assigned to anyone
-       
-        survey_stats[survey_name] = {
-            "total": total_for_survey,
-            "submitted": 0,
-            "pending": 0,
+        total_unique_employees = await session.scalar(stmt_total)
+        
+        if total_unique_employees == 0:
+            continue
+        
+        survey_stats[s_key] = {
+            "display_name": s_info["full_name"],
+            "total_employees": total_unique_employees,
+            "submitted_employees": 0,
+            "pending_employees": 0,
             "overall_avg": 0,
             "dept_avgs": [],
+            "pos_avgs": [],
             "question_avgs": [],
-            "questions": questions_list,
+            "questions": s_info["questions"],
         }
 
-    if not survey_stats:
-        return templates.TemplateResponse(
-            "admin/dashboard.html",
-            {"request": request, "survey_stats": survey_stats},
-        )
+    # 2. Count Distinct Submitted Employees
+    stmt_sub_distinct = select(
+        models.EmployeeSubmission.employee_id,
+        models.EmployeeSubmission.survey_name
+    ).distinct()
+    submitted_pairs = (await session.execute(stmt_sub_distinct)).all()
+    
+    for emp_id, s_name in submitted_pairs:
+        s_type = normalize_survey_name(s_name)
+        if s_type in survey_stats:
+            survey_stats[s_type]["submitted_employees"] += 1
 
-    # Fetch all submissions grouped by submission_hash
-    stmt_submissions = select(
-        SurveyResponse.submission_hash,
-        SurveyResponse.department,
-        func.count(SurveyResponse.question_no).label("question_count")
-    ).group_by(SurveyResponse.submission_hash, SurveyResponse.department)
-    submission_groups = (await session.execute(stmt_submissions)).all()
-
-    # Track which submissions belong to which survey
-    survey_hashes = {k: [] for k in survey_stats.keys()}
-
-    for submission_hash, department, question_count in submission_groups:
-        # determine survey type based on number of questions
-        if question_count == 8:
-            survey_name = "MSES"
-        elif question_count == 7:
-            survey_name = "ICSES"
-        elif question_count == 16:
-            survey_name = "TSES"
-        else:
-            continue  # unknown survey, skip
-
-        if survey_name not in survey_stats:
-            continue  # skip submissions for surveys not assigned to any employee
-
-        survey_stats[survey_name]["submitted"] += 1
-        survey_hashes[survey_name].append(submission_hash)
-
-    # Compute pending per survey
-    for survey_name, stats in survey_stats.items():
-        stats["pending"] = stats["total"] - stats["submitted"]
-
-    # Department and question averages per survey
-    for survey_name, stats in survey_stats.items():
-        if not survey_hashes[survey_name]:
-            continue  # skip if no submissions
-
-        # Overall survey average
-        overall_avg_stmt = (
-          select(func.coalesce(func.avg(SurveyResponse.score), 0))
-          .where(SurveyResponse.submission_hash.in_(survey_hashes[survey_name]))
+    # 3. Calculate Detailed Averages per Survey Type
+    for s_name, stats in survey_stats.items():
+        stats["pending_employees"] = max(0, stats["total_employees"] - stats["submitted_employees"])
         
-        )
-        stats["overall_avg"] = round((await session.scalar(overall_avg_stmt)) or 0 ,2)
-
-        # Department averages
-        dept_avg_stmt = (
-            select(
-                SurveyResponse.department,
-                func.coalesce(func.avg(SurveyResponse.score), 0).label("avg_score"),
-                func.count(distinct(SurveyResponse.submission_hash)).label("submitted_count")
+        # FIND HASHES: Crucial for linking Responses to metadata
+        # We look for hashes in SurveyResponse that match either the short key or the full name
+        type_hashes_stmt = select(models.SurveyResponse.submission_hash).where(
+            or_(
+                models.SurveyResponse.survey_name == s_name,
+                models.SurveyResponse.survey_name == stats["display_name"]
             )
-            .where(SurveyResponse.submission_hash.in_(survey_hashes[survey_name]))
-            .group_by(SurveyResponse.department)
-            .order_by(SurveyResponse.department)
-        )
-        stats["dept_avgs"] = (await session.execute(dept_avg_stmt)).all()
+        ).distinct()
+        hashes = (await session.execute(type_hashes_stmt)).scalars().all()
 
-        # Question averages
-        question_avg_stmt = (
-            select(
-                SurveyResponse.question_no,
-                func.coalesce(func.avg(SurveyResponse.score), 0).label("avg_score")
-            )
-            .where(SurveyResponse.submission_hash.in_(survey_hashes[survey_name]))
-            .group_by(SurveyResponse.question_no)
-            .order_by(SurveyResponse.question_no)
+        if not hashes:
+            continue
+
+        # --- Overall Average ---
+        avg_stmt = select(func.avg(models.SurveyResponse.score)).where(
+            models.SurveyResponse.submission_hash.in_(hashes)
         )
-        stats["question_avgs"] = (await session.execute(question_avg_stmt)).all()
+        stats["overall_avg"] = round((await session.scalar(avg_stmt)) or 0, 2)
+
+        # --- Dept Averages (Pulling directly from SurveyResponse) ---
+        dept_stmt = select(
+            models.SurveyResponse.department,
+            func.avg(models.SurveyResponse.score).label("avg_score")
+        ).where(
+            models.SurveyResponse.submission_hash.in_(hashes)
+        ).group_by(models.SurveyResponse.department)
+        stats["dept_avgs"] = (await session.execute(dept_stmt)).all()
+
+        # --- Position Averages (Join through EmployeeSubmission to Employee table) ---
+        # 
+        pos_stmt = (
+            select(
+                models.Employee.position,
+                func.avg(models.SurveyResponse.score).label("avg_score")
+            )
+            .join(models.EmployeeSubmission, models.SurveyResponse.submission_hash == models.EmployeeSubmission.submission_hash)
+            .join(models.Employee, models.EmployeeSubmission.employee_id == models.Employee.id)
+            .where(models.SurveyResponse.submission_hash.in_(hashes))
+            .group_by(models.Employee.position)
+        )
+        stats["pos_avgs"] = (await session.execute(pos_stmt)).all()
+
+        # --- Question Averages ---
+        q_avg_stmt = select(
+            models.SurveyResponse.question_no,
+            func.avg(models.SurveyResponse.score).label("avg_score")
+        ).where(
+            models.SurveyResponse.submission_hash.in_(hashes)
+        ).group_by(models.SurveyResponse.question_no)
+        
+        raw_q_avgs = (await session.execute(q_avg_stmt)).all()
+        
+        # Grading Category Logic
+        grading_func = {
+            "MSES": management_score_category,
+            "ICSES": client_score_category,
+            "TSES": team_score_category
+        }.get(s_name)
+
+        stats["question_avgs"] = [
+            {
+                "question_no": r.question_no,
+                "avg_score": round(r.avg_score, 2),
+                "category": grading_func(int(r.avg_score)) if grading_func else "N/A"
+            } for r in raw_q_avgs
+        ]
 
     return templates.TemplateResponse(
-        "admin/dashboard.html",
-        {"request": request, "survey_stats": survey_stats},
+        "admin/dashboard.html", 
+        {"request": request, "survey_stats": survey_stats}
     )
 
 
 
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+import datetime as dt
 
-
+from app.utils import (
+    SURVEY_DETAILS, 
+    management_score_category, 
+    client_score_category, 
+    team_score_category
+)
 
 @app.get("/admin/employees", response_class=HTMLResponse)
 async def admin_employees(
@@ -281,119 +302,126 @@ async def admin_employees(
     session: AsyncSession = Depends(get_session),
     imported: int | None = None,
     added: int | None = None,
-    skipped: int | None = None,
+    updated: int | None = None,
     added_single: int | None = None,
     invited: int | None = None,
     invited_count: int | None = None,
     reminded: int | None = None,
 ):
-    # 1. Fetch Employees with Submissions and Assignments eagerly loaded
+    # 1. Fetch Employees with their assignments
     stmt = (
         select(models.Employee)
-        .options(
-            selectinload(models.Employee.submissions),
-            selectinload(models.Employee.assignments)
-        )
+        .options(selectinload(models.Employee.assignments))
         .order_by(models.Employee.id)
     )
     result = await session.execute(stmt)
     employees = result.scalars().all()
 
-    # 2. Gather all submission hashes
-    all_submission_hashes = []
-    for emp in employees:
-        for sub in emp.submissions:
-            all_submission_hashes.append(sub.submission_hash)
-
-    # 3. Fetch all SurveyResponses for these hashes in bulk
-    response_map = {}
-    if all_submission_hashes:
-        resp_stmt = select(models.SurveyResponse).where(
-            models.SurveyResponse.submission_hash.in_(all_submission_hashes)
+    # 2. Fetch all submissions related to these employees
+    emp_ids = [e.id for e in employees]
+    submissions = []
+    if emp_ids:
+        sub_stmt = select(models.EmployeeSubmission).where(
+            models.EmployeeSubmission.employee_id.in_(emp_ids)
         )
-        resps_result = await session.execute(resp_stmt)
-        for r in resps_result.scalars().all():
-            response_map.setdefault(r.submission_hash, []).append(r)
+        sub_result = await session.execute(sub_stmt)
+        submissions = sub_result.scalars().all()
 
-    # 4. Process data into a format the template can easily read
-    for employee in employees:
-        # CHANGE: This is now { "manager@email.com": [survey_1_data, survey_2_data] }
-        employee.submissions_by_manager = {}
+    # 3. Fetch all raw SurveyResponses
+    all_hashes = [sub.submission_hash for sub in submissions]
+    response_map = {}
+    if all_hashes:
+        resp_stmt = select(models.SurveyResponse).where(
+            models.SurveyResponse.submission_hash.in_(all_hashes)
+        )
+        resp_result = await session.execute(resp_stmt)
+        for resp in resp_result.scalars().all():
+            response_map.setdefault(resp.submission_hash, []).append(resp)
 
-        for submission in employee.submissions:
-            h = submission.submission_hash
-            responses = response_map.get(h, [])
+    # 4. Define the Mapping for Grading Functions
+    QUESTION_GRADING_FUNCTIONS = {
+        "MSES": management_score_category,
+        "ICSES": client_score_category,
+        "TSES": team_score_category,
+    }
+
+    processed_results_lookup = {}
+
+    # 5. Process each submission
+    for sub in submissions:
+        responses = response_map.get(sub.submission_hash, [])
+        s_code = sub.survey_name.strip()
+        
+        # Pull details from SURVEY_DETAILS in utils.py
+        survey_info = SURVEY_DETAILS.get(s_code, {})
+        full_name = survey_info.get("full_name", s_code)
+        q_text_list = survey_info.get("questions", [])
+        num_q = len(q_text_list)
+        
+        grading_func = QUESTION_GRADING_FUNCTIONS.get(s_code)
+
+        detailed_scores = []
+        for r in sorted(responses, key=lambda x: x.question_no):
+            q_idx = r.question_no - 1
+            q_text = q_text_list[q_idx] if q_idx < num_q else f"Question {r.question_no}"
             
-            if not responses:
-                continue
-
-            manager_email_key = submission.manager_email.strip().lower()
-
-            # Determine survey type
-            num_questions = len(responses)
-            if num_questions == 8: 
-                survey_name = "MSES"
-            elif num_questions == 7: 
-                survey_name = "ICSES"
-            elif num_questions == 16: 
-                survey_name = "TSES"
-            else: 
-                survey_name = f"Survey ({num_questions} Qs)"
-
-            # Get scoring helpers
-            survey_questions = SURVEY_MAPPING.get(survey_name, [])
-            category_func, desc_func = SURVEY_CATEGORY_FUNC.get(
-                survey_name, (get_score_category, get_score_category_score)
-            )
-
-            # Sort responses and calculate scores
-            responses_sorted = sorted(responses, key=lambda r: r.question_no)
-            question_scores = []
-            total_score = 0
+            # Use original grading function
+            q_category = "N/A"
+            if grading_func:
+                q_category = grading_func(int(r.score))
             
-            for idx, r in enumerate(responses_sorted, start=1):
-                q_text = survey_questions[idx-1] if idx-1 < len(survey_questions) else f"Question {idx}"
-                question_scores.append({
-                    "question_no": idx,
-                    "question": q_text,
-                    "score": r.score,
-                    "category": category_func(r.score),
-                    "description": desc_func(r.score),
-                })
-                total_score += r.score
+            detailed_scores.append({
+                "question": q_text,
+                "score": r.score,
+                "category": q_category
+            })
 
-            # PREPARE DATA OBJECT
-            submission_result = {
-                "survey_name": survey_name,
-                "total_score": total_score,
-                "category": category_func(total_score),
-                "description": desc_func(total_score),
-                "question_scores": question_scores,
-                "submitted_at": submission.submitted_at
-            }
+        # Store in lookup using a unique key
+        key = (sub.employee_id, sub.manager_email.strip().lower(), s_code)
+        processed_results_lookup[key] = {
+            "survey_name": s_code,
+            "full_survey_name": full_name, # Added full name for modal/display
+            "question_scores": detailed_scores,
+            "submitted_at": sub.submitted_at
+        }
 
-            # CHANGE: Append to the list instead of assigning directly
-            if manager_email_key not in employee.submissions_by_manager:
-                employee.submissions_by_manager[manager_email_key] = []
+    # 6. Group Data for the Frontend
+    for emp in employees:
+        emp.manager_summary = {}
+        for assignment in emp.assignments:
+            m_email = assignment.manager_email.strip().lower()
+            if m_email not in emp.manager_summary:
+                emp.manager_summary[m_email] = {
+                    "manager_name": assignment.manager_name,
+                    "surveys": []
+                }
             
-            employee.submissions_by_manager[manager_email_key].append(submission_result)
+            res_data = processed_results_lookup.get((emp.id, m_email, assignment.survey_name))
+            
+            # Fetch full name for the list display
+            display_name = SURVEY_DETAILS.get(assignment.survey_name, {}).get("full_name", assignment.survey_name)
+
+            emp.manager_summary[m_email]["surveys"].append({
+                "survey_name": assignment.survey_name,
+                "display_name": display_name, # Added display_name
+                "is_submitted": assignment.is_submitted,
+                "result": res_data
+            })
 
     return templates.TemplateResponse(
-        "admin/employees.html",
+        "admin/employees.html", 
         {
-            "request": request,                                                         
+            "request": request, 
             "employees": employees,
             "imported": imported,
             "added": added,
-            "skipped": skipped,
+            "updated": updated,
             "added_single": added_single,
             "invited": invited,
             "invited_count": invited_count,
-            "reminded": reminded,
-        },
+            "reminded": reminded
+        }
     )
-
-
 
 
 
@@ -403,100 +431,87 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.future import select
 from typing import List
 
+import secrets
+from app.security import hash_token
+from sqlalchemy import select, and_
+
 @app.post("/admin/employees/add")
 async def add_employee(
     request: Request,
     name: str = Form(...),
     email: str = Form(...),
-    manager_names: List[str] = Form(...), # Changed to List
-    manager_emails: List[str] = Form(...), # Changed to List
+    manager_names: List[str] = Form(...),
+    manager_emails: List[str] = Form(...),
     department: str = Form(...),
     survey_names: List[str] = Form(...),
     position: str = Form(...),
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
-    # Clean and strip inputs
-    email = email.strip()
+    # Clean and normalize inputs
     name = name.strip()
+    email = email.strip().lower()
     department = department.strip()
     position = position.strip()
     
-    # Process Lists (Arrays)
+    # Filter out empty strings from lists
     survey_names = [s.strip() for s in survey_names if s.strip()]
-    m_names = [m.strip() for m in manager_names if m.strip()]
-    m_emails = [m.strip() for m in manager_emails if m.strip()]
+    mgr_names = [m.strip() for m in manager_names if m.strip()]
+    mgr_emails = [m.strip().lower() for m in manager_emails if m.strip()]
 
-    # Check if employee with the same email already exists
+    # 1. Check if employee already exists (Upsert Logic)
     result = await session.execute(select(models.Employee).where(models.Employee.email == email))
-    existing_employee = result.scalar_one_or_none()
+    employee = result.scalars().first()
 
-    if existing_employee:
-        # Modern styled alert for duplicate email
-        html_content = f"""
-        <html>
-        <head>
-            <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    height: 100vh;
-                    background-color: #f4f4f4;
-                    margin: 0;
-                }}
-                .alert-box {{
-                    background-color: #a99a68;
-                    color: white;
-                    padding: 20px 30px;
-                    border-radius: 10px;
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-                    text-align: center;
-                    animation: slideDown 0.5s ease;
-                }}
-                .alert-box button {{
-                    margin-top: 15px;
-                    padding: 10px 20px;
-                    border: none;
-                    border-radius: 5px;
-                    background-color: white;
-                    color: #a99a68;
-                    font-weight: bold;
-                    cursor: pointer;
-                }}
-                @keyframes slideDown {{
-                    from {{ transform: translateY(-50px); opacity: 0; }}
-                    to {{ transform: translateY(0); opacity: 1; }}
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="alert-box">
-                Employee with email <strong>{email}</strong> already exists!
-                <br>
-                <button onclick="window.location.href='/admin/employees'">Go Back</button>
-            </div>
-        </body>
-        </html>
-        """
-        return HTMLResponse(content=html_content)
+    if not employee:
+        # Create new Employee record
+        employee = models.Employee(
+            name=name,
+            email=email,
+            department=department,
+            position=position,
+        )
+        session.add(employee)
+        await session.flush()  # To get the employee.id for assignments
+    else:
+        # Update existing employee details if they've changed
+        employee.name = name
+        employee.department = department
+        employee.position = position
 
-    # Add new employee mapping to your specific ARRAY columns
-    employee = models.Employee(
-        name=name, 
-        email=email, 
-        department=department, 
-        survey_names=survey_names, 
-        position=position, 
-        manager_names=m_names,    # Matches your table Column
-        manager_emails=m_emails   # Matches your table Column
-    )
-    
-    session.add(employee)
+    # 2. Create SurveyAssignments for each survey AND each manager
+    # This matches your new SurveyAssignment model structure
+    for survey in survey_names:
+        for i, m_email in enumerate(mgr_emails):
+            m_name = mgr_names[i] if i < len(mgr_names) else "Manager"
+
+            # Check if this specific assignment already exists to prevent unique constraint errors
+            assign_stmt = select(models.SurveyAssignment).where(
+                and_(
+                    models.SurveyAssignment.employee_id == employee.id,
+                    models.SurveyAssignment.manager_email == m_email,
+                    models.SurveyAssignment.survey_name == survey
+                )
+            )
+            existing_assign = (await session.execute(assign_stmt)).scalars().first()
+
+            if not existing_assign:
+                # Generate a unique token for the email link
+                token = secrets.token_urlsafe(32)
+                assignment = models.SurveyAssignment(
+                    employee_id=employee.id,
+                    manager_email=m_email,
+                    manager_name=m_name,
+                    survey_name=survey,
+                    invite_token_hash=hash_token(token),
+                )
+                session.add(assignment)
+
     await session.commit()
-
+    
+    # Redirect back to directory with success flag
     return RedirectResponse(url="/admin/employees?added_single=1", status_code=303)
+
 
 
 from fastapi import UploadFile, File, Form, HTTPException
@@ -521,94 +536,143 @@ async def import_employees(
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
+    # 1. Determine Source
     if csv_file and csv_file.filename:
         csv_stream = TextIOWrapper(csv_file.file, encoding="utf-8")
     elif csv_rows and csv_rows.strip():
         csv_stream = StringIO(csv_rows)
     else:
-        raise HTTPException(status_code=400, detail="No CSV data")
+        raise HTTPException(status_code=400, detail="No CSV data provided")
 
     reader = csv.reader(csv_stream)
-    next(reader, None) # Skip header
-    
+    next(reader, None)  # Skip header row
+
     added_count = 0
     updated_count = 0
 
     for row in reader:
-        if not row or len(row) < 7: continue
+        # Expected CSV: SurveyNames, EmpName, Position, Dept, MgrNames, MgrEmails, EmpEmail
+        if not row or len(row) < 7:
+            continue
 
-        # Parse data
-        new_surveys = [s.strip() for s in row[0].split(",") if s.strip()]
-        emp_name, pos, dept = row[1].strip(), row[2].strip(), row[3].strip()
-        new_m_names = [m.strip() for m in row[4].split(",") if m.strip()]
-        new_m_emails = [m.strip().lower() for m in row[5].split(",") if m.strip()]
+        # Parse and clean data
+        survey_names = [s.strip() for s in row[0].split(",") if s.strip()]
+        emp_name = row[1].strip()
+        pos = row[2].strip()
+        dept = row[3].strip()
+        manager_names = [m.strip() for m in row[4].split(",") if m.strip()]
+        manager_emails = [m.strip().lower() for m in row[5].split(",") if m.strip()]
         emp_email = row[6].strip().lower()
 
-        # Check if exists
+        if not emp_email:
+            continue
+
+        # 2. Upsert Employee (Find existing or create new)
         stmt = select(models.Employee).where(models.Employee.email == emp_email)
         result = await session.execute(stmt)
-        existing_emp = result.scalars().first()
+        employee = result.scalars().first()
 
-        if existing_emp:
-            # 1. Merge Surveys (avoid duplicates)
-            s_set = set(existing_emp.survey_names or [])
-            s_set.update(new_surveys)
-            existing_emp.survey_names = list(s_set)
-
-            # 2. Merge Managers
-            cur_emails = list(existing_emp.manager_emails or [])
-            cur_names = list(existing_emp.manager_names or [])
-            for m_e, m_n in zip(new_m_emails, new_m_names):
-                if m_e not in cur_emails:
-                    cur_emails.append(m_e)
-                    cur_names.append(m_n)
-            
-            existing_emp.manager_emails, existing_emp.manager_names = cur_emails, cur_names
-            updated_count += 1
-        else:
-            # Create new record
-            session.add(models.Employee(
-                name=emp_name, email=emp_email, department=dept, position=pos,
-                survey_names=new_surveys, manager_names=new_m_names, manager_emails=new_m_emails
-            ))
+        if not employee:
+            employee = models.Employee(
+                name=emp_name,
+                email=emp_email,
+                department=dept,
+                position=pos
+            )
+            session.add(employee)
+            await session.flush()  # Get employee.id for the assignments below
             added_count += 1
-    
+        else:
+            # Sync metadata if it changed in the CSV
+            employee.name = emp_name
+            employee.position = pos
+            employee.department = dept
+            updated_count += 1
+
+        # 3. Create SurveyAssignments for each manager-survey combination
+        for survey in survey_names:
+            for i, mgr_email in enumerate(manager_emails):
+                # Fallback to "Manager" if the names list is shorter than the emails list
+                mgr_name = manager_names[i] if i < len(manager_names) else "Manager"
+
+                # Check if this specific assignment already exists (Relational Unique Check)
+                assignment_stmt = select(models.SurveyAssignment).where(
+                    models.SurveyAssignment.employee_id == employee.id,
+                    models.SurveyAssignment.manager_email == mgr_email,
+                    models.SurveyAssignment.survey_name == survey
+                )
+                existing_assignment = (await session.execute(assignment_stmt)).scalars().first()
+                
+                if existing_assignment:
+                    continue  # Skip if this manager is already assigned this survey for this employee
+
+                # Generate a new unique token for this specific assignment
+                token = secrets.token_urlsafe(32)
+                token_hash = hash_token(token) 
+                
+                new_assignment = models.SurveyAssignment(
+                    employee_id=employee.id,
+                    manager_email=mgr_email,
+                    manager_name=mgr_name,
+                    survey_name=survey,
+                    invite_token_hash=token_hash
+                )
+                session.add(new_assignment)
+
     await session.commit()
-    return RedirectResponse(f"/admin/employees?imported=1&added={added_count}&updated={updated_count}", 303)
-
-
-
-
-async def invite_employee(session: AsyncSession, employee: models.Employee, smtp: models.SMTPSettings, base_url: str) -> None:
-    # Use fallback to empty lists to avoid iteration errors
-    names = employee.manager_names or []
-    emails = employee.manager_emails or []
     
-    # Use the first survey name or a default
-    survey_count = len(employee.survey_names) if employee.survey_names else 0
-    survey_title = ", ".join(employee.survey_names) if survey_count > 0 else "Evaluation Survey"
+    return RedirectResponse(
+        url=f"/admin/employees?imported=1&added={added_count}&updated={updated_count}",
+        status_code=303
+    )
 
-    # We loop through the managers and create a UNIQUE assignment for each
-    for i in range(len(emails)):
-        m_name = names[i] if i < len(names) else "Manager"
-        m_email = emails[i]
 
-        # 1. Generate a unique token for THIS specific manager's invitation
+
+
+import secrets
+import datetime as dt
+from sqlalchemy.future import select
+from app.security import hash_token
+# Assuming send_email is imported from your mail utility
+# from app.utils.mail import send_email 
+
+from app.utils import SURVEY_DETAILS, normalize_survey_name, hash_token
+
+async def invite_employee(
+    session: AsyncSession,
+    employee: models.Employee,
+    smtp: models.SMTPSettings,
+    base_url: str
+) -> None:
+    # 1. Fetch all assignments
+    stmt = (
+        select(models.SurveyAssignment)
+        .where(models.SurveyAssignment.employee_id == employee.id)
+        .where(models.SurveyAssignment.is_submitted == False)
+    )
+    result = await session.execute(stmt)
+    assignments = result.scalars().all()
+
+    for assignment in assignments:
+        # --- NEW LOGIC START ---
+        # Get the standardized code (e.g., 'Team Satisfaction Survey' -> 'TSES')
+        s_code = normalize_survey_name(assignment.survey_name)
+        
+        # Pull the official full name from your utils.py mapping
+        # Fallback to the database value if for some reason it's not in our mapping
+        survey_info = SURVEY_DETAILS.get(s_code, {})
+        full_display_name = survey_info.get("full_name", assignment.survey_name)
+        # --- NEW LOGIC END ---
+
+        # 2. Token generation
         token = secrets.token_urlsafe(32)
-        token_hash = hash_token(token)
+        assignment.invite_token_hash = hash_token(token)
+        assignment.invited_at = dt.datetime.utcnow() 
         
-        # 2. Create a new Assignment record (this allows multiple submissions)
-        new_assignment = models.SurveyAssignment(
-            employee_id=employee.id,
-            manager_email=m_email,
-            manager_name=m_name,
-            invite_token_hash=token_hash
-        )
-        session.add(new_assignment)
-        
-        # 3. Create the unique link for this manager
         link = f"{base_url}/survey/{token}"
 
+        # 3. Prepare the Email HTML
+        # Note: Using {full_display_name} in the paragraph below
         html = f"""
 <!DOCTYPE html>
 <html>
@@ -629,9 +693,9 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
           <tr>
             <td style="padding:32px; color:#000000;">
               <p style="font-size:16px; line-height:1.6; margin-top:0;">
-                Hello {m_name},
+                Hello {assignment.manager_name},
               </p>
-              <p>You have been requested to fill out a <strong>{survey_title}</strong> 
+              <p>You have been requested to fill out the <strong>{full_display_name}</strong> 
               for <strong>{employee.name}</strong> ({employee.position}).</p>
               <div style="text-align:center; margin:32px 0;">
                 <a href="{link}"
@@ -662,6 +726,7 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
 </html>
 """
 
+        # 4. Send the email
         await send_email(
             host=smtp.host,
             port=smtp.port,
@@ -670,17 +735,17 @@ async def invite_employee(session: AsyncSession, employee: models.Employee, smtp
             use_tls=smtp.use_tls,
             from_email=smtp.from_email,
             from_name=smtp.from_name,
-            to_email=m_email,
-            subject=f"Survey Request: Evaluation for {employee.name}",
+            to_email=assignment.manager_email,
+            subject=f"Survey Request: {full_display_name} for {employee.name}",
             html_content=html,
         )
-    
-    # 4. Mark the employee as invited (overall status)
-    employee.invited_at = dt.datetime.utcnow()
-    
-    # Commit all assignments and the employee update at once
+
+    # 5. Commit changes
     await session.commit()
 
+
+
+from sqlalchemy import select, and_, exists
 
 @app.post("/admin/employees/{employee_id}/resend")
 async def resend_invite(
@@ -690,26 +755,25 @@ async def resend_invite(
     admin_id: int = Depends(require_admin),
 ):
     employee = await session.get(models.Employee, employee_id)
-    if not employee or not employee.is_active or employee.submitted_at:
+    if not employee or not employee.is_active:
         return RedirectResponse(url="/admin/employees", status_code=303)
+    
+    # Check if there are any pending assignments to resend
+    stmt = select(models.SurveyAssignment).where(
+        models.SurveyAssignment.employee_id == employee_id,
+        models.SurveyAssignment.is_submitted == False
+    )
+    result = await session.execute(stmt)
+    if not result.scalars().first():
+        # All surveys for this person are already submitted
+        return RedirectResponse(url="/admin/employees", status_code=303)
+
     smtp = await get_smtp(session)
     base_url = str(request.base_url).rstrip("/")
+    
+    # invite_employee now handles looping through specific assignments
     await invite_employee(session, employee, smtp, base_url)
-    await session.commit()
-    return RedirectResponse(url="/admin/employees", status_code=303)
-
-
-@app.post("/admin/employees/{employee_id}/toggle")
-async def toggle_employee(
-    request: Request,
-    employee_id: int,
-    session: AsyncSession = Depends(get_session),
-    admin_id: int = Depends(require_admin),
-):
-    employee = await session.get(models.Employee, employee_id)
-    if employee:
-        employee.is_active = not employee.is_active
-        await session.commit()
+    
     return RedirectResponse(url="/admin/employees", status_code=303)
 
 
@@ -722,35 +786,29 @@ async def send_invites(
     smtp = await get_smtp(session)
     base_url = str(request.base_url).rstrip("/")
 
-    result = await session.execute(
-        select(models.Employee).where(
+    # Fetch employees who have at least one assignment that has NEVER been invited
+    stmt = select(models.Employee).where(
+        models.Employee.is_active == True,
+        exists().where(
             and_(
-                models.Employee.is_active.is_(True),
-                models.Employee.submitted_at.is_(None),
+                models.SurveyAssignment.employee_id == models.Employee.id,
+                models.SurveyAssignment.invited_at == None
             )
         )
     )
+    result = await session.execute(stmt)
     employees = result.scalars().all()
 
     invited_count = 0
-    skipped_count = 0
-
     for employee in employees:
-        # Skip already invited employees
-        if employee.invited_at:
-            skipped_count += 1
-            continue
-
         await invite_employee(session, employee, smtp, base_url)
         invited_count += 1
 
     await session.commit()
-
     return RedirectResponse(
-        url=f"/admin/employees?invited=1&invited_count={invited_count}&skipped={skipped_count}",
+        url=f"/admin/employees?invited=1&invited_count={invited_count}",
         status_code=303,
     )
-
 
 
 @app.post("/admin/send-reminders")
@@ -762,31 +820,30 @@ async def send_reminders(
     smtp = await get_smtp(session)
     base_url = str(request.base_url).rstrip("/")
 
-    result = await session.execute(
-        select(models.Employee).where(
+    # Fetch employees who have assignments that ARE invited but NOT submitted
+    stmt = select(models.Employee).where(
+        models.Employee.is_active == True,
+        exists().where(
             and_(
-                models.Employee.submitted_at.is_(None),
-                models.Employee.is_active.is_(True),
-                models.Employee.invited_at.is_not(None),
+                models.SurveyAssignment.employee_id == models.Employee.id,
+                models.SurveyAssignment.invited_at != None,
+                models.SurveyAssignment.is_submitted == False
             )
         )
     )
+    result = await session.execute(stmt)
     employees = result.scalars().all()
 
     invited_count = 0
-
     for employee in employees:
         await invite_employee(session, employee, smtp, base_url)
         invited_count += 1
 
     await session.commit()
-
     return RedirectResponse(
         url=f"/admin/employees?reminded=1&invited_count={invited_count}",
         status_code=303,
     )
-
-
 
 @app.get("/admin/department-heads", response_class=HTMLResponse)
 async def department_heads(request: Request, session: AsyncSession = Depends(get_session), admin_id: int = Depends(require_admin)):
@@ -891,46 +948,71 @@ async def get_assignment_by_token(session: AsyncSession, token: str) -> Optional
     return result.scalars().first()
 
 
+
+from sqlalchemy.orm import joinedload
+
+async def get_assignment_by_token(session: AsyncSession, token: str):
+    h = hash_token(token)
+    stmt = (
+        select(models.SurveyAssignment)
+        .options(joinedload(models.SurveyAssignment.employee)) # Crucial for your code
+        .where(models.SurveyAssignment.invite_token_hash == h)
+    )
+    result = await session.execute(stmt)
+    return result.scalars().first()
+
+import secrets
+import datetime as dt
+from app.utils import SURVEY_DETAILS, SCORES, weighted_score
+
+def get_survey_data(stored_name: str):
+    if not stored_name:
+        return None
+    # 1. Try direct key (MSES, TSES, ICSES)
+    if stored_name in SURVEY_DETAILS:
+        return stored_name, SURVEY_DETAILS[stored_name]
+    # 2. Try full name match
+    for key, data in SURVEY_DETAILS.items():
+        if stored_name.strip().upper() == data["full_name"].upper():
+            return key, data
+    return None, None
+
 @app.get("/survey/{token}", response_class=HTMLResponse)
 async def survey_page(
     request: Request,
     token: str,
-    survey_index: int = 0,
     session: AsyncSession = Depends(get_session),
 ):
-    # 1. Look up the specific assignment for THIS manager
     assignment = await get_assignment_by_token(session, token)
     
     if not assignment or not assignment.employee or not assignment.employee.is_active:
         raise HTTPException(status_code=404, detail="Invite link invalid or employee inactive")
 
-    employee = assignment.employee
-
-    # 2. Check if THIS SPECIFIC assignment is already submitted
-    if assignment.is_submitted or not employee.survey_names or survey_index >= len(employee.survey_names):
+    if assignment.is_submitted:
         return templates.TemplateResponse(
             "survey/submitted.html",
-            {"request": request, "employee": employee},
+            {"request": request, "employee": assignment.employee},
         )
 
-    # Current survey logic remains similar, but uses the assignment context
-    current_survey = employee.survey_names[survey_index]
-    questions = SURVEY_MAPPING.get(current_survey)
-    if not questions:
+    # Use the flexible lookup
+    survey_code, survey_info = get_survey_data(assignment.survey_name)
+    
+    if not survey_info:
         raise HTTPException(status_code=400, detail="Invalid survey type")
 
     return templates.TemplateResponse(
         "survey/form.html",
         {
             "request": request,
-            "employee": employee,
-            "questions": questions,
-            "scores": list(SCORES.keys()),
+            "employee": assignment.employee,
+            "questions": survey_info["questions"],
+            "scores": sorted(list(SCORES.keys()), reverse=True),
             "score_labels": SCORES,
             "token": token,
-            "current_survey_name": current_survey,
-            "survey_index": survey_index,
-            "total_surveys": len(employee.survey_names),
+            "current_survey_name": survey_info["full_name"], # Display full name
+            "survey_code": survey_code,
+            "survey_index": 0, 
+            "total_surveys": 1,
         },
     )
 
@@ -941,108 +1023,68 @@ async def submit_survey(
     token: str,
     session: AsyncSession = Depends(get_session),
 ):
-    # 1. Look up the specific assignment
     assignment = await get_assignment_by_token(session, token)
     if not assignment or not assignment.employee or not assignment.employee.is_active:
-        raise HTTPException(status_code=404, detail="Invite not found")
+        raise HTTPException(status_code=404, detail="Invite link invalid")
 
     if assignment.is_submitted:
-        raise HTTPException(status_code=400, detail="You have already submitted this feedback.")
+        raise HTTPException(status_code=400, detail="Already submitted.")
+
+    # Use flexible lookup to handle short/long names stored in DB
+    survey_code, survey_info = get_survey_data(assignment.survey_name)
+    if not survey_info:
+        raise HTTPException(status_code=400, detail="Survey configuration not found")
 
     employee = assignment.employee
+    questions_list = survey_info["questions"]
+    full_name = survey_info["full_name"]
+    
     form_data = await request.form()
-    survey_index = int(form_data.get("survey_index", 0))
-
-    # Get current survey details
-    if survey_index >= len(employee.survey_names):
-        return templates.TemplateResponse(
-            "survey/submitted.html",
-            {"request": request, "employee": employee},
-        )
-
-    current_survey = employee.survey_names[survey_index]
-    questions = SURVEY_MAPPING.get(current_survey)
-    if not questions:
-        raise HTTPException(status_code=400, detail="Invalid survey type")
-
-    # Collect scores from form
-    question_scores = []
-    for i, question in enumerate(questions, start=1):
-        val = form_data.get(f"q{i}")
-        try:
-            val = int(val)
-        except (TypeError, ValueError):
-            val = None
-
-        if val is None or val not in SCORES:
-            return templates.TemplateResponse(
-                "survey/form.html",
-                {
-                    "request": request,
-                    "employee": employee,
-                    "questions": questions,
-                    "scores": list(SCORES.keys()),
-                    "score_labels": SCORES,
-                    "token": token,
-                    "current_survey_name": current_survey,
-                    "survey_index": survey_index,
-                    "total_surveys": len(employee.survey_names),
-                    "error": "All questions are required",
-                },
-                status_code=400,
-            )
-
-        # Apply weighting logic (e.g., score * number of questions)
-        weighted_val = val * len(questions)
-        question_scores.append({
-            "question_no": i,
-            "score": weighted_val,
-        })
-
-    # Generate unique hash for this specific submission
     submission_hash = secrets.token_hex(32)
 
-    # Save individual responses
-    for q in question_scores:
-        session.add(
-            models.SurveyResponse(
-                submission_hash=submission_hash,
-                department=employee.department,
-                question_no=q["question_no"],
-                score=q["score"],
-            )
-        )
+    # Validate and Save Responses
+    for i in range(1, len(questions_list) + 1):
+        raw_val = form_data.get(f"q{i}")
+        try:
+            score = int(raw_val)
+            if score not in SCORES: raise ValueError
+        except (TypeError, ValueError):
+            return templates.TemplateResponse("survey/form.html", {
+                "request": request, 
+                "employee": employee, 
+                "questions": questions_list,
+                "scores": sorted(list(SCORES.keys()), reverse=True), 
+                "score_labels": SCORES, 
+                "token": token,
+                "current_survey_name": full_name, 
+                "error": "All questions are required"
+            }, status_code=400)
 
-    # --- THE CRITICAL FIX: TRACKING THE SUBMISSION ---
-    # We now pass manager_email to satisfy the NotNull constraint
+        # Apply weighting logic
+        final_score = weighted_score(score, questions_list) 
+
+        session.add(models.SurveyResponse(
+            submission_hash=submission_hash,
+            department=employee.department,
+            survey_name=survey_code, # Standardize to code when saving results
+            question_no=i,
+            score=final_score
+        ))
+
+    # Record the submission
     session.add(models.EmployeeSubmission(
         employee_id=employee.id,
-        manager_email=assignment.manager_email,  # <--- FIXED: No more Null error
+        manager_email=assignment.manager_email,
+        survey_name=survey_code, # Save standardized code
         submission_hash=submission_hash,
         submitted_at=dt.datetime.utcnow()
     ))
 
-    # Handle multi-survey logic (if manager has more than one survey to fill)
-    next_index = survey_index + 1
-    if next_index < len(employee.survey_names):
-        await session.commit()
-        return RedirectResponse(
-            url=f"/survey/{token}?survey_index={next_index}",
-            status_code=303
-        )
-
-    # Finalize the assignment status
     assignment.is_submitted = True
     assignment.submitted_at = dt.datetime.utcnow()
-    
     await session.commit()
 
-    return templates.TemplateResponse(
-        "survey/submitted.html",
-        {"request": request, "employee": employee},
-    )
-
-
+    return templates.TemplateResponse("survey/submitted.html", {"request": request, "employee": employee})
 
 @app.get("/health")
 async def healthcheck():

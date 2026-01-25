@@ -2,64 +2,52 @@
 {% block content %}
 
 <div class="bg-black min-h-screen flex items-center justify-center py-10 px-4">
-  <div class="bg-[#a99a68] shadow-2xl rounded-2xl w-full max-w-3xl p-6 sm:p-10">
+  <div class="bg-[#a99a68] shadow-2xl rounded-2xl w-full max-w-4xl p-6 sm:p-10">
 
-    <!-- Header -->
-    <div class="mb-8 text-center">
-      <h1 class="text-2xl sm:text-3xl font-bold text-black mb-2">
+    <div class="mb-10 text-center border-b border-black/10 pb-8">
+      <h1 class="text-2xl sm:text-4xl font-extrabold text-black mb-4 uppercase tracking-tight">
         {{ current_survey_name }}
       </h1>
-      <p class="text-black text-sm sm:text-base leading-relaxed">
-        Your responses are anonymous. We do not store your name, email, or any identifier
-        with your answers. Completion is tracked only through a one-way hash of a random
-        submission ID.
+      
+      <div class="inline-block bg-black text-[#a99a68] px-4 py-1 rounded-full mb-6 font-bold text-sm">
+       {{ employee.name }} | Dept: {{ employee.department }}
+      </div>
+
+      <p class="text-black/80 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed italic">
+        Your responses are strictly anonymous. Completion is tracked via a secure one-way hash.
       </p>
-      <h2 class="text-black font-semibold mt-4">
-        Department: {{ employee.department }}
-      </h2>
-      {% if total_surveys and total_surveys > 1 %}
-        <p class="text-black text-sm mt-1">
-          Survey {{ survey_index + 1 }} of {{ total_surveys }}
-        </p>
-      {% endif %}
     </div>
 
     {% if error %}
-      <div class="bg-red-800 text-red-300 px-4 py-2 rounded mb-6 text-sm text-center">
-        {{ error }}
+      <div class="bg-red-900 text-white px-4 py-3 rounded-xl mb-6 text-sm text-center font-bold">
+        ⚠️ {{ error }}
       </div>
     {% endif %}
 
-    <form method="post" action="/survey/{{ token }}" class="space-y-8">
-      <!-- Hidden fields to track survey -->
-      <input type="hidden" name="survey_names" value="{{ survey_names }}">
-      <input type="hidden" name="survey_index" value="{{ survey_index }}">
-
-      <!-- Questions -->
-      <div class="space-y-6">
+    <form method="post" action="/survey/{{ token }}" class="space-y-12">
+      <div class="space-y-10">
         {% for question in questions %}
           {% set idx = loop.index %}
-          <div>
-            <div class="font-semibold text-black mb-3 text-lg">
-              Q{{ idx }}. {{ question }}
+          <div class="bg-white/20 p-6 rounded-2xl border border-black/5 shadow-sm">
+            <div class="font-bold text-black mb-6 text-xl flex gap-3">
+              <span class="opacity-30">#{{ idx }}</span>
+              <span>{{ question }}</span>
             </div>
 
-            <!-- Card-Style Options -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-{{ scores|length }} gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
               {% for score in scores %}
                 <label class="cursor-pointer group">
-                  <input
-                    type="radio"
-                    name="q{{ idx }}"
-                    value="{{ score }}"
-                    required
-                    class="peer hidden"
-                  >
-                  <div class="border border-white rounded-xl p-4 h-[100px] sm:h-[120px] text-center transition-all duration-200
-                              peer-checked:border-blue-600 peer-checked:bg-white peer-checked:text-black
-                              hover:border-blue-400 hover:bg-white hover:text-black">
-                    <span class="font-semibold text-black peer-checked:text-black text-lg">{{ score }}</span>
-                    <p class="text-black peer-checked:text-black text-sm mt-1">{{ score_labels[score] }}</p>
+                  <input type="radio" name="q{{ idx }}" value="{{ score }}" required class="peer hidden">
+                  <div class="border-2 border-black/20 rounded-xl p-4 min-h-[100px] flex flex-col items-center justify-center text-center transition-all duration-300
+                              peer-checked:border-black peer-checked:bg-white peer-checked:scale-105
+                              group-hover:bg-white/40">
+                    
+                    <span class="font-black text-2xl text-black peer-checked:text-[#a99a68]">
+                        {{ score }}
+                    </span>
+                    <p class="text-black font-bold text-[10px] uppercase peer-checked:text-[#a99a68]">
+                        {{ score_labels[score] }}
+                    </p>
                   </div>
                 </label>
               {% endfor %}
@@ -68,19 +56,12 @@
         {% endfor %}
       </div>
 
-      <!-- Submit Button -->
-      <div class="text-center">
-        <button
-          type="submit"
-          class="bg-black text-white px-8 py-3 rounded-xl font-semibold text-lg  transition">
-          {% if survey_index + 1 < total_surveys %}
-            Submit & Next Survey
-          {% else %}
-            Submit Survey
-          {% endif %}
+      <div class="pt-8 text-center">
+        <button type="submit"
+          class="bg-black text-[#a99a68] hover:bg-zinc-900 px-16 py-4 rounded-2xl font-black text-xl transition-all hover:scale-105 active:scale-95 shadow-xl">
+          SUBMIT EVALUATION
         </button>
       </div>
-
     </form>
   </div>
 </div>

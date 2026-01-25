@@ -10,8 +10,8 @@
             <div>
                 <h3 class="text-lg font-bold">Import Successful</h3>
                 <p class="text-sm mt-1">
-                    {{ added }} employees imported
-                    {% if skipped and skipped > 0 %} · {{ skipped }} rows skipped {% endif %}
+                    {{ added }} employees processed
+                    {% if updated and updated > 0 %} · {{ updated }} records updated {% endif %}
                 </p>
             </div>
             <button onclick="this.parentElement.parentElement.remove()" class="text-green-700 hover:text-green-900 text-xl font-bold leading-none">&times;</button>
@@ -29,7 +29,7 @@
         <div class="flex justify-between items-start">
             <div>
                 <h3 class="text-lg font-bold">Invites Sent</h3>
-                <p class="text-sm mt-1">{{ invited_count or 0 }} email invitations delivered successfully.</p>
+                <p class="text-sm mt-1">{{ invited_count or 0 }} email invitations triggered successfully.</p>
             </div>
             <button onclick="this.parentElement.parentElement.remove()" class="text-blue-700 hover:text-blue-900 text-xl font-bold">&times;</button>
         </div>
@@ -64,11 +64,11 @@
 
             <div class="space-y-3">
                 <label class="block text-sm font-medium text-gray-700">Assign Surveys</label>
-                <div id="survey-container" class="space-y-2">
+                <div class="space-y-2">
                     <select name="survey_names" required class="w-full border rounded-md px-3 py-2 text-sm">
-                        <option value="MSES">Management Survey (MSES)</option>
-                        <option value="ICSES">Client Survey (ICSES)</option>
-                        <option value="TSES">Team Survey (TSES)</option>
+                        <option value="MSES">Management Satisfaction Survey (MSES)</option>
+                        <option value="ICSES">Internal Customer Satisfaction Survey (ICSES)</option>
+                        <option value="TSES">Team Satisfaction Survey (TSES)</option>
                     </select>
                 </div>
             </div>
@@ -95,114 +95,152 @@
     <div class="bg-white shadow-lg rounded-xl p-6 border border-gray-100 flex flex-col justify-center space-y-4">
         <form method="post" action="/admin/send-invites">
             <button class="w-full bg-[#ad9f6f] text-white py-4 rounded-xl font-bold hover:bg-[#9c8f5f] shadow-md transition-all">
-                🚀 Send All Pending Invites
+                 Send All Pending Invites
             </button>
         </form>
         <form method="post" action="/admin/send-reminders">
             <button class="w-full bg-white border-2 border-gray-200 text-gray-700 py-4 rounded-xl font-bold hover:bg-gray-50 transition-all">
-                🔔 Send Reminders to Pending
+                 Send Reminders to Pending
             </button>
         </form>
     </div>
 </div>
 
-<div class="space-y-6">
+<div class="space-y-6 pb-20">
     <h2 class="text-2xl font-bold text-gray-800 px-1">Employee Directory</h2>
     
     {% for employee in employees %}
     <div class="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-100 hover:shadow-xl transition-shadow duration-300">
-        <div class="p-6" x-data="{ openManager: null }">
+        <div class="p-6">
             <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
                 
-                <div class="flex-grow space-y-3">
+                <div class="flex-grow space-y-4">
                     <div>
                         <h3 class="text-xl font-bold text-gray-900">{{ employee.name }}</h3>
                         <p class="text-sm text-gray-500 font-medium">{{ employee.email }}</p>
-                    </div>
-
-                    <div class="py-3 px-4 bg-gray-50 rounded-lg border border-gray-200" x-data="{ openManager: null }">
-    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Manager Assignment Status</p>
-    <div class="grid grid-cols-1 gap-3">
-        {% for assignment in employee.assignments %}
-            {% set mgr_key = assignment.manager_email.strip().lower() %}
-            {# submissions_list is now a list of surveys from this manager #}
-            {% set submissions_list = employee.submissions_by_manager.get(mgr_key, []) %}
-            
-            <div class="bg-white rounded border border-gray-200 overflow-hidden shadow-sm">
-                <div @click="openManager = (openManager === 'asn_{{ assignment.id }}' ? null : 'asn_{{ assignment.id }}')" 
-                     class="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 transition-all">
-                    <div class="flex items-center">
-                        <span class="w-2 h-2 rounded-full {% if submissions_list %}bg-green-500{% else %}bg-amber-400{% endif %} mr-2"></span>
-                        <div>
-                            <p class="text-sm font-semibold text-gray-700">{{ assignment.manager_name }}</p>
-                            <p class="text-[10px] text-gray-500">{{ assignment.manager_email }}</p>
+                        <div class="flex gap-2 mt-2">
+                            <span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold uppercase tracking-wider border border-blue-100">{{ employee.department }}</span>
+                            <span class="px-2 py-0.5 bg-gray-50 text-gray-600 rounded text-[10px] font-bold uppercase tracking-wider border border-gray-200">{{ employee.position }}</span>
                         </div>
                     </div>
+
+                 <div class="space-y-4" x-data="{ openGroup: null }">
+    <p class="text-sm font-bold text-gray-500 uppercase tracking-wide">Feedback Tracking</p>
+
+    {% for m_email, m_data in employee.manager_summary.items() %}
+    <div class="border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <!-- Manager Header -->
+        <div @click="openGroup = (openGroup === '{{ loop.index }}' ? null : '{{ loop.index }}')"
+             class="bg-gray-50 px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors">
+            <div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
+                <span class="text-base font-semibold text-gray-800">{{ m_data.manager_name }}</span>
+                <span class="text-sm text-gray-500 font-mono">{{ m_email }}</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-xs font-bold px-2 py-1 rounded bg-white border border-gray-300 text-gray-600">
+                    {{ m_data.surveys | length }} SURVEYS
+                </span>
+                <svg class="w-5 h-5 text-gray-400 transform transition-transform" 
+                     :class="openGroup === '{{ loop.index }}' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Surveys List -->
+        <div x-show="openGroup === '{{ loop.index }}'" x-collapse x-cloak class="bg-white p-4 space-y-3 border-t border-gray-100">
+            {% for s in m_data.surveys %}
+            <div class="p-4 rounded-lg border transition-colors shadow-sm 
+                {% if s.is_submitted %}bg-[#a99a68] border-green-200{% else %}bg-amber-50 border-amber-200{% endif %}">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                     <div>
-                        {% if submissions_list %}
-                            <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-[9px] font-bold uppercase">{{ submissions_list|length }} Submitted</span>
+                        <span class="text-sm font-semibold uppercase tracking-wide 
+                            {% if s.is_submitted %}text-black-700{% else %}text-amber-700{% endif %}">
+                            {{ s.display_name }}
+                        </span>
+                        {% if s.is_submitted and s.result %}
+                            <p class="text-base font-bold text-black-800 mt-1">{{ s.result.category }}</p>
                         {% else %}
-                            <span class="px-2 py-1 bg-amber-50 text-amber-700 rounded text-[9px] font-bold uppercase">Pending</span>
+                            <p class="text-sm font-medium text-amber-700 mt-1 italic">Awaiting response...</p>
                         {% endif %}
                     </div>
+
+                    {% if s.is_submitted and s.result %}
+                    <div class="text-right">
+                        <div class="text-2xl font-bold text-black-700">{{ s.result.total_score }}</div>
+                        <div class="text-xs text-black-600 font-semibold uppercase mt-1">Final Score</div>
+                    </div>
+                    {% endif %}
                 </div>
 
-                <div x-show="openManager === 'asn_{{ assignment.id }}'" x-collapse x-cloak class="bg-gray-50 border-t border-gray-100">
-                    {% for result_data in submissions_list %}
-                    <div class="p-4 border-b border-gray-200 last:border-0 bg-white m-2 rounded shadow-inner">
-                        <div class="flex justify-between items-center mb-2">
-                            <div>
-                                <span class="text-[10px] font-black text-blue-600 uppercase">{{ result_data.survey_name }}</span>
-                                <p class="text-[9px] text-gray-400">{{ result_data.submitted_at.strftime('%Y-%m-%d %H:%M') }}</p>
-                            </div>
-                            <div class="text-right">
-                                <span class="text-lg font-black text-[#ad9f6f]">{{ result_data.total_score }}</span>
-                            </div>
-                        </div>
-                        
-                        <p class="text-xs font-bold text-gray-800">{{ result_data.category }}</p>
-                        <p class="text-[11px] text-gray-500 italic mb-3">"{{ result_data.description }}"</p>
-                        
-                        <table class="w-full text-[10px]">
-                            {% for item in result_data.question_scores %}
-                            <tr class="border-t border-gray-50">
-                                <td class="py-1 text-gray-600">{{ item.question }}</td>
-                                <td class="py-1 text-right font-bold">{{ item.score }}</td>
-                            </tr>
-                            {% endfor %}
+                <!-- Question Breakdown -->
+                {% if s.is_submitted and s.result %}
+                <div class="mt-3 pt-3 border-t border-green-200" x-data="{ showTable: false }">
+                    <button @click="showTable = !showTable" type="button" 
+                            class="text-sm font-semibold text-black hover:text-green-900 flex items-center gap-2 focus:outline-none">
+                        <span x-text="showTable ? '▼ Hide Question Breakdown' : '▶ View Question Ratings'"></span>
+                    </button>
+
+                    <div x-show="showTable" x-collapse x-cloak class="mt-2 overflow-x-auto">
+                        <table class="w-full text-sm border-collapse">
+                            <thead>
+                                <tr class="border-b border-gray-200 text-left text-gray-500">
+                                    <th class="pb-2 font-semibold uppercase tracking-wide">Question</th>
+                                    <th class="pb-2 px-2 font-semibold uppercase tracking-wide">Rating</th>
+                                    <th class="pb-2 text-right font-semibold uppercase tracking-wide">Score</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                {% for q in s.result.question_scores %}
+                                <tr class="hover:bg-gray-50/50 transition-colors">
+                                    <td class="py-2 text-gray-700 pr-4 leading-relaxed">{{ q.question }}</td>
+                                    <td class="py-2 px-2 whitespace-nowrap">
+                                        <span class="px-2 py-1 rounded text-xs font-bold uppercase shadow-sm
+                                            {% if q.category == 'Outstanding' %} bg-blue-600 text-white
+                                            {% elif q.category == 'Exceeds Target' %} bg-green-500 text-white
+                                            {% elif q.category == 'Meets Target' %} bg-amber-400 text-white
+                                            {% else %} bg-red-500 text-white {% endif %}">
+                                            {{ q.category }}
+                                        </span>
+                                    </td>
+                                    <td class="py-2 text-right font-mono font-bold text-gray-600">{{ q.score }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
                         </table>
                     </div>
-                    {% endfor %}
                 </div>
+                {% endif %}
+
             </div>
-        {% endfor %}
+            {% endfor %}
+        </div>
     </div>
+    {% endfor %}
 </div>
 
-                    <div class="flex flex-wrap gap-2 pt-2">
-                        <span class="px-3 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-bold border border-blue-100">{{ employee.department }}</span>
-                        <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-md text-xs font-bold border border-gray-200">{{ employee.position }}</span>
-                    </div>
                 </div>
 
                 <div class="flex flex-col items-end space-y-4 min-w-[180px]">
                     <div class="flex flex-col w-full gap-2">
                         <form method="post" action="/admin/employees/{{ employee.id }}/toggle" class="w-full">
                             <button class="w-full text-center text-xs font-bold py-2 rounded border {% if employee.is_active %}text-red-600 border-red-200 hover:bg-red-50{% else %}text-green-600 border-green-200 hover:bg-green-50{% endif %}">
-                                {{ 'Deactivate' if employee.is_active else 'Activate' }}
+                                {{ 'Deactivate Profile' if employee.is_active else 'Reactivate Profile' }}
                             </button>
                         </form>
                         
                         {% if employee.is_active %}
                         <form method="post" action="/admin/employees/{{ employee.id }}/resend" class="w-full">
                             <button class="w-full text-center text-xs font-bold py-2 rounded border border-[#ad9f6f] text-[#ad9f6f] hover:bg-amber-50">
-                                Resend All Invites
+                            Resend All Invites
                             </button>
                         </form>
                         {% endif %}
                     </div>
+                    
                     <div class="text-[10px] text-gray-400 text-right">
-                        Last Invite: {{ employee.invited_at.strftime("%Y-%m-%d") if employee.invited_at else "Never" }}
+                        {% set all_invites = employee.assignments | map(attribute='invited_at') | reject('none') | list | sort %}
+                        Last Interaction: {{ all_invites[-1].strftime("%Y-%m-%d") if all_invites else "No invites sent" }}
                     </div>
                 </div>
             </div>
@@ -227,6 +265,9 @@
 
 <style>
     [x-cloak] { display: none !important; }
+    /* Simple styling for the Details tag to remove default marker */
+    details > summary { list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
 </style>
 
 {% endblock %}
