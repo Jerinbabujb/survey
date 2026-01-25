@@ -21,6 +21,8 @@ class Employee(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False)
+    manager_names = Column(ARRAY(String(255)), nullable=True)
+    manager_emails = Column(ARRAY(String(255)), nullable=True)
     department = Column(String(255), nullable=False)
     position= Column(String(255), nullable=False) 
     survey_names = Column(ARRAY(String(255)), nullable=True)
@@ -29,8 +31,27 @@ class Employee(Base):
     submitted_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
 
+    assignments = relationship("SurveyAssignment", back_populates="employee", cascade="all, delete-orphan")
     submissions = relationship("EmployeeSubmission", back_populates="employee")
 
+class SurveyAssignment(Base):
+    """Tracks individual invitations for each manager"""
+    __tablename__ = "survey_assignments"
+
+    id = Column(Integer, primary_key=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    manager_email = Column(String(255), nullable=False)
+    manager_name = Column(String(255), nullable=False)
+    
+    # Each manager gets their own unique token
+    invite_token_hash = Column(String(128), unique=True, nullable=False)
+    is_submitted = Column(Boolean, default=False)
+    submitted_at = Column(DateTime, nullable=True)
+
+    employee = relationship("Employee", back_populates="assignments")
+    __table_args__ = (
+        UniqueConstraint("employee_id", "manager_email", name="uq_emp_mgr_assignment"),
+    )
 
 class DepartmentHead(Base):
     __tablename__ = "department_heads"
@@ -46,6 +67,7 @@ class EmployeeSubmission(Base):
 
     id = Column(Integer, primary_key=True)
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    manager_email = Column(String(255), nullable=False)
     submission_hash = Column(String(128), nullable=False)
     submitted_at = Column(DateTime, nullable=False, default=dt.datetime.utcnow)
 

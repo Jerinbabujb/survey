@@ -1,276 +1,232 @@
 {% extends 'admin/base.html' %}
 {% block content %}
 
-<!-- Alerts -->
-{% if imported %}
-<div class="mb-6 rounded-xl border border-green-300 bg-green-50 px-6 py-4 text-green-800 shadow-md">
-  <div class="flex items-start justify-between">
-    <div>
-      <h3 class="text-lg font-bold">Import Successful</h3>
-      <p class="text-sm mt-1">
-        {{ added }} employees imported
-        {% if skipped and skipped > 0 %}
-          · {{ skipped }} rows skipped
-        {% endif %}
-      </p>
-      <p class="text-sm mt-1 font-medium">
-        Please send invites.
-      </p>
-    </div>
-    <button onclick="this.parentElement.parentElement.remove()" class="text-green-700 hover:text-green-900 text-xl font-bold leading-none">&times;</button>
-  </div>
-  <div class="mt-4">
-    <form method="post" action="/admin/send-invites">
-      <button class="bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-[#9c8f5f] transition-colors">Send Invites Now</button>
-    </form>
-  </div>
-</div>
-{% endif %}
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
-{% if added_single %}
-<div class="mb-6 rounded-xl border border-green-300 bg-green-50 px-6 py-4 text-green-800 shadow-md">
-  <div class="flex items-start justify-between">
-    <div>
-      <h3 class="text-lg font-bold">Employee Added</h3>
-      <p class="text-sm mt-1">
-        Employee added successfully.
-      </p>
-      <p class="text-sm mt-1 font-medium">
-        Please send invite.
-      </p>
-    </div>
-    <button onclick="this.parentElement.parentElement.remove()" class="text-green-700 hover:text-green-900 text-xl font-bold">&times;</button>
-  </div>
-  <div class="mt-4">
-    <form method="post" action="/admin/send-invites">
-      <button class="bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-[#9c8f5f] transition-colors">Send Invite Now</button>
-    </form>
-  </div>
-</div>
-{% endif %}
-
-{% if invited %}
-<div class="mb-6 rounded-xl border border-blue-300 bg-blue-50 px-6 py-4 text-blue-800 shadow-md">
-  <div class="flex justify-between items-start">
-    <div>
-      <h3 class="text-lg font-bold">Invites Sent</h3>
-      <p class="text-sm mt-1">
-        {{ invited_count or 0 }} employees invited successfully
-        {% if skipped and skipped > 0 %}
-          · {{ skipped }} skipped
-        {% endif %}
-      </p>
-    </div>
-    <button onclick="this.parentElement.parentElement.remove()" class="text-blue-700 hover:text-blue-900 text-xl font-bold">&times;</button>
-  </div>
-</div>
-{% endif %}
-
-{% if reminded %}
-<div class="mb-6 rounded-xl border border-purple-300 bg-purple-50 px-6 py-4 text-purple-800 shadow-md">
-  <div class="flex justify-between items-start">
-    <div>
-      <h3 class="text-lg font-bold">Reminders Sent</h3>
-      <p class="text-sm mt-1">
-        {{ invited_count or 0 }} reminders sent successfully
-      </p>
-    </div>
-    <button onclick="this.parentElement.parentElement.remove()" class="text-purple-700 hover:text-purple-900 text-xl font-bold">&times;</button>
-  </div>
-</div>
-{% endif %}
-
-<!-- Employee Forms (Add + Bulk Import + Bulk Email) -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-
-  <!-- Add Employee -->
-  <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-xl transition-shadow duration-300">
-    <h2 class="text-xl font-bold mb-4">Add Employee</h2>
-    <form method="post" action="/admin/employees/add" class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium mb-1">Name</label>
-        <input type="text" name="name" required class="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-400">
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Email</label>
-        <input type="email" name="email" required class="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-400">
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Department</label>
-        <input type="text" name="department" required class="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-400">
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-1">Position</label>
-        <input type="text" name="position" required class="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-400">
-      </div>
-      <div>
-        <label class="block text-sm font-medium mb-2">Survey Names</label>
-        <div id="survey-container" class="space-y-2">
-          <input type="text" name="survey_names" required placeholder="Survey Name" class="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-400">
-        </div>
-        <button type="button" onclick="addSurveyField()" class="mt-2 text-sm text-blue-600 hover:underline">+ Add another survey</button>
-      </div>
-      <button class="w-full bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-[#9c8f5f] transition-colors">Add Employee</button>
-    </form>
-  </div>
-
-  <script>
-    function addSurveyField() {
-      const container = document.getElementById("survey-container");
-      const input = document.createElement("input");
-      input.type = "text";
-      input.name = "survey_names";
-      input.placeholder = "Survey Name";
-      input.required = true;
-      input.className = "w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-400";
-      container.appendChild(input);
-    }
-  </script>
-
-  <!-- Bulk Import -->
-  <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-xl transition-shadow duration-300">
-    <h2 class="text-xl font-bold mb-4">Bulk Import (CSV)</h2>
-    <form id="csvForm" method="post" action="/admin/employees/import" enctype="multipart/form-data" class="space-y-4">
-      <label class="block text-sm font-medium mb-1">Paste CSV (optional)</label>
-      <textarea name="csv_rows" rows="6" class="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="Name,Email,Department,Survey Names (comma-separated),Position"></textarea>
-      <div class="text-center text-gray-500 font-semibold">OR</div>
-      <label class="block text-sm font-medium mb-1">Upload CSV File (optional)</label>
-      <input type="file" name="csv_file" accept=".csv" class="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
-      <div id="csvAlert" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-md text-sm">
-        Please provide either CSV text or upload a CSV file.
-      </div>
-      <button type="submit" class="w-full bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-[#9c8f5f] transition-colors">Import Employees</button>
-      <a href="/static/import.csv" download class="block mt-2">
-        <button type="button" class="w-full flex items-center justify-center gap-2 bg-black text-white border border-gray-300 font-medium px-4 py-2 rounded-md shadow transition-colors hover:shadow-md">Download Sample CSV</button>
-      </a>
-      <p class="text-xs text-gray-500 mt-2">CSV columns: Name, Email, Department, Survey Names (comma-separated), Position</p>
-    </form>
-    <script>
-      document.getElementById('csvForm').addEventListener('submit', function(e) {
-        const textarea = this.querySelector('textarea[name="csv_rows"]');
-        const fileInput = this.querySelector('input[name="csv_file"]');
-        const alertBox = document.getElementById('csvAlert');
-        if (!textarea.value.trim() && !fileInput.files.length) {
-          e.preventDefault();
-          alertBox.classList.remove('hidden');
-        } else {
-          alertBox.classList.add('hidden');
-        }
-      });
-    </script>
-  </div>
-
-  <!-- Bulk Email -->
-  <div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-xl transition-shadow duration-300 space-y-4">
-    <h2 class="text-xl font-bold mb-4">Bulk Email</h2>
-    <form method="post" action="/admin/send-invites">
-      <button class="w-full bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-[#9c8f5f] transition-colors">Send Invites</button>
-    </form>
-    <form method="post" action="/admin/send-reminders">
-      <button class="w-full bg-black text-white px-4 py-2 rounded-md hover:bg-[#000] transition-colors">Send Reminders</button>
-    </form>
-  </div>
-</div>
-
-<!-- Employees List -->
-<div class="space-y-6">
-{% for employee in employees %}
-<div class="bg-white shadow-lg rounded-xl p-6 hover:shadow-xl transition-shadow duration-300 mb-4">
-
-  <!-- Employee Info -->
-  <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
-    <div>
-      {% if not employee.submitted_at %}
-        <h3 class="text-lg font-semibold">{{ employee.name }}</h3>
-        <p class="text-sm text-gray-500">{{ employee.email }}</p>
-      {% else %}
-        <h3 class="text-lg font-semibold">****</h3>
-        <p class="text-sm text-gray-500">***@{{ employee.email.split('@')[1] }}</p>
-      {% endif %}
-      <p class="text-sm mt-1">
-        <span class="font-medium">Department:</span> {{ employee.department }} ·
-        <span class="font-medium">Position:</span> {{ employee.position }}
-      </p>
-      <p class="text-sm mt-1">
-        {% if not employee.is_active %}
-          <span class="text-gray-400 font-medium">Inactive</span>
-        {% elif employee.submitted_at %}
-          <span class="text-green-600 font-semibold">Submitted</span>
-        {% else %}
-          <span class="text-amber-600 font-semibold">Pending</span>
-        {% endif %}
-      </p>
-      <p class="text-xs text-gray-500 mt-1">
-        Invited: {{ employee.invited_at.strftime("%Y-%m-%d %H:%M") if employee.invited_at else "—" }}  
-        | Submitted: {{ employee.submitted_at.strftime("%Y-%m-%d %H:%M") if employee.submitted_at else "—" }}
-      </p>
-    </div>
-    <div class="flex space-x-2 mt-2 md:mt-0">
-      <form method="post" action="/admin/employees/{{ employee.id }}/toggle">
-        <button class="text-blue-600 hover:underline disabled:opacity-50" {{ 'disabled' if employee.submitted_at else '' }}>
-          {{ 'Activate' if not employee.is_active else 'Deactivate' }}
-        </button>
-      </form>
-      {% if employee.is_active %}
-      <form method="post" action="/admin/employees/{{ employee.id }}/resend">
-        <button class="text-amber-600 hover:underline disabled:opacity-50" {{ 'disabled' if employee.submitted_at else '' }}>
-          Send Invite
-        </button>
-      </form>
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- Submissions by Survey -->
-  {% for survey_name, survey_data in employee.submissions_by_survey.items() %}
-  <div class="mt-4">
-    <h4 class="text-lg font-semibold mb-2">{{ survey_name }}</h4>
-    <table class="w-full border border-gray-200 rounded-md text-sm">
-      <thead class="bg-gray-100">
-        <tr>
-          <th class="px-3 py-2 text-left">Question</th>
-          <th class="px-3 py-2 text-center">Score</th>
-          <th class="px-3 py-2 text-center">Category</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for q in survey_data.question_scores %}
-        <tr class="border-t">
-          <!-- Question with hover tooltip -->
-          <td class="px-3 py-2 relative group">
-            <span class="cursor-pointer font-medium text-blue-600">Q{{ q.question_no }}</span>
-            <div class="absolute left-0 top-full mt-2 w-96
-                        bg-white border border-gray-200 rounded-lg shadow-xl
-                        text-sm text-gray-700 p-4
-                        opacity-0 invisible
-                        group-hover:opacity-100 group-hover:visible
-                        transition-all duration-200 ease-out z-50">
-              {{ q.question }}
+<div id="alerts-container">
+    {% if imported %}
+    <div class="mb-6 rounded-xl border border-green-300 bg-green-50 px-6 py-4 text-green-800 shadow-md">
+        <div class="flex items-start justify-between">
+            <div>
+                <h3 class="text-lg font-bold">Import Successful</h3>
+                <p class="text-sm mt-1">
+                    {{ added }} employees imported
+                    {% if skipped and skipped > 0 %} · {{ skipped }} rows skipped {% endif %}
+                </p>
             </div>
-          </td>
-          <td class="px-3 py-2 text-center font-medium">{{ q.score }}</td>
-          <td class="px-3 py-2 text-center font-medium">
-            {% if q.category == "Outstanding" %}
-              <span class="text-green-700 font-semibold">{{ q.category }}</span>
-            {% elif q.category == "Exceeds Target" %}
-              <span class="text-blue-600 font-semibold">{{ q.category }}</span>
-            {% elif q.category == "Meets Target" %}
-              <span class="text-yellow-600 font-semibold">{{ q.category }}</span>
-            {% else %}
-              <span class="text-red-600 font-semibold">{{ q.category }}</span>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endfor %}
+            <button onclick="this.parentElement.parentElement.remove()" class="text-green-700 hover:text-green-900 text-xl font-bold leading-none">&times;</button>
+        </div>
+        <div class="mt-4">
+            <form method="post" action="/admin/send-invites">
+                <button class="bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-[#9c8f5f] transition-colors font-bold text-sm">Send Invites Now</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
 
+    {% if invited %}
+    <div class="mb-6 rounded-xl border border-blue-300 bg-blue-50 px-6 py-4 text-blue-800 shadow-md">
+        <div class="flex justify-between items-start">
+            <div>
+                <h3 class="text-lg font-bold">Invites Sent</h3>
+                <p class="text-sm mt-1">{{ invited_count or 0 }} email invitations delivered successfully.</p>
+            </div>
+            <button onclick="this.parentElement.parentElement.remove()" class="text-blue-700 hover:text-blue-900 text-xl font-bold">&times;</button>
+        </div>
+    </div>
+    {% endif %}
 </div>
-{% else %}
-<p class="text-center text-gray-500">No employees found.</p>
-{% endfor %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white shadow-lg rounded-xl p-6 border border-gray-100">
+        <h2 class="text-xl font-bold mb-6 text-gray-800">Add New Record</h2>
+        <form method="post" action="/admin/employees/add" class="space-y-4">
+            <div class="space-y-3">
+                <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest">Employee Details</label>
+                <input type="text" name="name" placeholder="Full Name" required class="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400">
+                <input type="email" name="email" placeholder="Email Address" required class="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400">
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="text" name="department" placeholder="Department" required class="border rounded-md px-3 py-2 text-sm">
+                    <input type="text" name="position" placeholder="Position" required class="border rounded-md px-3 py-2 text-sm">
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest">Reporting Line (Managers)</label>
+                <div id="manager-container" class="space-y-2">
+                    <div class="flex gap-2 p-2 bg-gray-50 rounded border border-gray-200">
+                        <input type="text" name="manager_names" placeholder="Manager Name" required class="w-1/2 border rounded px-2 py-1 text-xs">
+                        <input type="email" name="manager_emails" placeholder="Manager Email" required class="w-1/2 border rounded px-2 py-1 text-xs">
+                    </div>
+                </div>
+                <button type="button" onclick="addManagerField()" class="text-xs text-blue-600 font-bold hover:underline">+ Add Another Manager</button>
+            </div>
+
+            <div class="space-y-3">
+                <label class="block text-sm font-medium text-gray-700">Assign Surveys</label>
+                <div id="survey-container" class="space-y-2">
+                    <select name="survey_names" required class="w-full border rounded-md px-3 py-2 text-sm">
+                        <option value="MSES">Management Survey (MSES)</option>
+                        <option value="ICSES">Client Survey (ICSES)</option>
+                        <option value="TSES">Team Survey (TSES)</option>
+                    </select>
+                </div>
+            </div>
+
+            <button type="submit" class="w-full bg-[#ad9f6f] text-white py-3 rounded-md font-bold hover:bg-[#9c8f5f] transition-all shadow-md mt-4">
+                Save & Prepare Invite
+            </button>
+        </form>
+    </div>
+
+    <div class="bg-white shadow-lg rounded-xl p-6 border border-gray-100 flex flex-col">
+        <h2 class="text-xl font-bold mb-6 text-gray-800">Bulk Import</h2>
+        <form id="csvForm" method="post" action="/admin/employees/import" enctype="multipart/form-data" class="space-y-4 flex-grow">
+            <textarea name="csv_rows" rows="6" class="w-full border rounded-md px-3 py-2 text-[10px] font-mono" placeholder="Survey Name, Employee Name, Position, Dept, Manager Name, Manager Email, Emp Email"></textarea>
+            <div class="relative flex items-center justify-center py-2">
+                <div class="border-t w-full border-gray-200"></div>
+                <div class="bg-white px-3 text-xs font-bold text-gray-400 absolute">Or Upload File</div>
+            </div>
+            <input type="file" name="csv_file" accept=".csv" class="w-full border rounded-md px-3 py-2 text-sm">
+            <button type="submit" class="w-full bg-black text-white py-3 rounded-md font-bold">Process CSV Import</button>
+        </form>
+    </div>
+
+    <div class="bg-white shadow-lg rounded-xl p-6 border border-gray-100 flex flex-col justify-center space-y-4">
+        <form method="post" action="/admin/send-invites">
+            <button class="w-full bg-[#ad9f6f] text-white py-4 rounded-xl font-bold hover:bg-[#9c8f5f] shadow-md transition-all">
+                🚀 Send All Pending Invites
+            </button>
+        </form>
+        <form method="post" action="/admin/send-reminders">
+            <button class="w-full bg-white border-2 border-gray-200 text-gray-700 py-4 rounded-xl font-bold hover:bg-gray-50 transition-all">
+                🔔 Send Reminders to Pending
+            </button>
+        </form>
+    </div>
 </div>
+
+<div class="space-y-6">
+    <h2 class="text-2xl font-bold text-gray-800 px-1">Employee Directory</h2>
+    
+    {% for employee in employees %}
+    <div class="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-100 hover:shadow-xl transition-shadow duration-300">
+        <div class="p-6" x-data="{ openManager: null }">
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+                
+                <div class="flex-grow space-y-3">
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900">{{ employee.name }}</h3>
+                        <p class="text-sm text-gray-500 font-medium">{{ employee.email }}</p>
+                    </div>
+
+                    <div class="py-3 px-4 bg-gray-50 rounded-lg border border-gray-200" x-data="{ openManager: null }">
+    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Manager Assignment Status</p>
+    <div class="grid grid-cols-1 gap-3">
+        {% for assignment in employee.assignments %}
+            {% set mgr_key = assignment.manager_email.strip().lower() %}
+            {# submissions_list is now a list of surveys from this manager #}
+            {% set submissions_list = employee.submissions_by_manager.get(mgr_key, []) %}
+            
+            <div class="bg-white rounded border border-gray-200 overflow-hidden shadow-sm">
+                <div @click="openManager = (openManager === 'asn_{{ assignment.id }}' ? null : 'asn_{{ assignment.id }}')" 
+                     class="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 transition-all">
+                    <div class="flex items-center">
+                        <span class="w-2 h-2 rounded-full {% if submissions_list %}bg-green-500{% else %}bg-amber-400{% endif %} mr-2"></span>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-700">{{ assignment.manager_name }}</p>
+                            <p class="text-[10px] text-gray-500">{{ assignment.manager_email }}</p>
+                        </div>
+                    </div>
+                    <div>
+                        {% if submissions_list %}
+                            <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-[9px] font-bold uppercase">{{ submissions_list|length }} Submitted</span>
+                        {% else %}
+                            <span class="px-2 py-1 bg-amber-50 text-amber-700 rounded text-[9px] font-bold uppercase">Pending</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div x-show="openManager === 'asn_{{ assignment.id }}'" x-collapse x-cloak class="bg-gray-50 border-t border-gray-100">
+                    {% for result_data in submissions_list %}
+                    <div class="p-4 border-b border-gray-200 last:border-0 bg-white m-2 rounded shadow-inner">
+                        <div class="flex justify-between items-center mb-2">
+                            <div>
+                                <span class="text-[10px] font-black text-blue-600 uppercase">{{ result_data.survey_name }}</span>
+                                <p class="text-[9px] text-gray-400">{{ result_data.submitted_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-lg font-black text-[#ad9f6f]">{{ result_data.total_score }}</span>
+                            </div>
+                        </div>
+                        
+                        <p class="text-xs font-bold text-gray-800">{{ result_data.category }}</p>
+                        <p class="text-[11px] text-gray-500 italic mb-3">"{{ result_data.description }}"</p>
+                        
+                        <table class="w-full text-[10px]">
+                            {% for item in result_data.question_scores %}
+                            <tr class="border-t border-gray-50">
+                                <td class="py-1 text-gray-600">{{ item.question }}</td>
+                                <td class="py-1 text-right font-bold">{{ item.score }}</td>
+                            </tr>
+                            {% endfor %}
+                        </table>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+                    <div class="flex flex-wrap gap-2 pt-2">
+                        <span class="px-3 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-bold border border-blue-100">{{ employee.department }}</span>
+                        <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-md text-xs font-bold border border-gray-200">{{ employee.position }}</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-col items-end space-y-4 min-w-[180px]">
+                    <div class="flex flex-col w-full gap-2">
+                        <form method="post" action="/admin/employees/{{ employee.id }}/toggle" class="w-full">
+                            <button class="w-full text-center text-xs font-bold py-2 rounded border {% if employee.is_active %}text-red-600 border-red-200 hover:bg-red-50{% else %}text-green-600 border-green-200 hover:bg-green-50{% endif %}">
+                                {{ 'Deactivate' if employee.is_active else 'Activate' }}
+                            </button>
+                        </form>
+                        
+                        {% if employee.is_active %}
+                        <form method="post" action="/admin/employees/{{ employee.id }}/resend" class="w-full">
+                            <button class="w-full text-center text-xs font-bold py-2 rounded border border-[#ad9f6f] text-[#ad9f6f] hover:bg-amber-50">
+                                Resend All Invites
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    <div class="text-[10px] text-gray-400 text-right">
+                        Last Invite: {{ employee.invited_at.strftime("%Y-%m-%d") if employee.invited_at else "Never" }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+    function addManagerField() {
+        const container = document.getElementById("manager-container");
+        const div = document.createElement("div");
+        div.className = "flex gap-2 p-2 bg-gray-50 rounded border border-gray-200 mt-2";
+        div.innerHTML = `
+            <input type="text" name="manager_names" placeholder="Manager Name" required class="w-1/2 border rounded px-2 py-1 text-xs">
+            <input type="email" name="manager_emails" placeholder="Manager Email" required class="w-1/2 border rounded px-2 py-1 text-xs">
+            <button type="button" onclick="this.parentElement.remove()" class="text-red-500 font-bold px-1 hover:bg-red-50 rounded">&times;</button>
+        `;
+        container.appendChild(div);
+    }
+</script>
+
+<style>
+    [x-cloak] { display: none !important; }
+</style>
 
 {% endblock %}

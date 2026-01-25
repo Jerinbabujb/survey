@@ -39,9 +39,9 @@ TEAM_QNS=[
 ]
 
 SURVEY_MAPPING = {
-    "Management Satisfaction Evaluation Survey": QUESTIONS,
-    "Internal Customer Satisfaction Evaluation Survey": CLIENT_QNS,
-    "Team Satisfaction Evaluation Survey": TEAM_QNS,
+    "MSES": QUESTIONS,
+    "ICSES": CLIENT_QNS,
+    "TSES": TEAM_QNS,
 }
 
 SCORES = {
