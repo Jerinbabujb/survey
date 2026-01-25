@@ -393,7 +393,8 @@ async def admin_employees(
             if m_email not in emp.manager_summary:
                 emp.manager_summary[m_email] = {
                     "manager_name": assignment.manager_name,
-                    "surveys": []
+                    "surveys": [],
+                    "is_submitted": assignment.is_submitted,
                 }
             
             res_data = processed_results_lookup.get((emp.id, m_email, assignment.survey_name))

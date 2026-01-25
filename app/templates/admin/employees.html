@@ -137,9 +137,15 @@
                 <span class="text-sm text-gray-500 font-mono">{{ m_email }}</span>
             </div>
             <div class="flex items-center gap-3">
+                {% if m_data.is_submitted %}
+                <span class="text-xs font-bold px-2 py-1 rounded bg-green border border-gray-300 text-white" style="background:green;">
+                    {{ m_data.surveys | length }} SURVEYS 
+                </span>
+                {% else %}
                 <span class="text-xs font-bold px-2 py-1 rounded bg-white border border-gray-300 text-gray-600">
                     {{ m_data.surveys | length }} SURVEYS
                 </span>
+                {% endif %}
                 <svg class="w-5 h-5 text-gray-400 transform transition-transform" 
                      :class="openGroup === '{{ loop.index }}' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path d="M19 9l-7 7-7-7"></path>
