@@ -32,7 +32,11 @@
       
       <div class="bg-white shadow-lg rounded-xl p-6 border-l-4 border-[#a99a68] transform transition hover:scale-105">
         <div class="text-gray-400 uppercase text-[10px] font-bold tracking-widest mb-2">Average Score</div>
-        <div class="text-3xl font-black text-[#a99a68]">{{ '%.2f'|format(stats.overall_avg) }}</div>
+       <div class="text-3xl font-black text-[#a99a68]">{{ '%.2f'|format(stats.overall_avg.score) }}</div>
+<div class="text-sm font-bold {% if stats.overall_avg.category == 'Outstanding' %} bg-blue-100 text-blue-700
+            {% elif stats.overall_avg.category == 'Exceeds Target' %} bg-emerald-100 text-emerald-700
+            {% elif stats.overall_avg.category == 'Meets Target' %} bg-amber-100 text-amber-700
+            {% else %} bg-rose-100 text-rose-700 {% endif %}">{{ stats.overall_avg.category }}</div>
       </div>
     </div>
 
@@ -46,15 +50,19 @@
                 <thead>
                   <tr class="text-left text-gray-400 border-b border-gray-50">
                     <th class="pb-3 font-bold uppercase text-[10px]">Department</th>
-                    <th class="pb-3 font-bold uppercase text-[10px] text-right">Avg Score</th>
+                    <th class="pb-3 font-bold uppercase text-[10px] text-right ">Avg Score</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
-                  {% for department, avg_score in stats.dept_avgs %}
+                  {% for dept in stats.dept_avgs %}
                   <tr class="hover:bg-blue-50/50 transition-colors">
-                    <td class="py-4 font-semibold text-gray-700">{{ department }}</td>
+                    <td class="py-4 font-semibold text-gray-700">{{ dept.name }}</td>
                     <td class="py-4 text-right">
-                        <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg font-black">{{ '%.2f'|format(avg_score) }}</span>
+                        <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg font-black">{{ '%.2f'|format(dept.score) }}</span>
+                        <span class="text-sm {% if dept.category == 'Outstanding' %} bg-blue-100 text-blue-700
+            {% elif dept.category == 'Exceeds Target' %} bg-emerald-100 text-emerald-700
+            {% elif dept.category == 'Meets Target' %} bg-amber-100 text-amber-700
+            {% else %} bg-rose-100 text-rose-700 {% endif %}">{{ dept.category }}</span>
                     </td>
                   </tr>
                   {% endfor %}
@@ -80,7 +88,11 @@
                   <tr class="hover:bg-purple-50/50 transition-colors">
                     <td class="py-4 font-semibold text-gray-700">{{ row.position }}</td>
                     <td class="py-4 text-right">
-                        <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg font-black">{{ '%.2f'|format(row.avg_score) }}</span>
+                        <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg font-black">{{ '%.2f'|format(row.score) }}</span>
+                        <span class="text-sm {% if row.category == 'Outstanding' %} bg-blue-100 text-blue-700
+            {% elif row.category == 'Exceeds Target' %} bg-emerald-100 text-emerald-700
+            {% elif row.category == 'Meets Target' %} bg-amber-100 text-amber-700
+            {% else %} bg-rose-100 text-rose-700 {% endif %}">{{ row.category }}</span>
                     </td>
                   </tr>
                   {% endfor %}
@@ -122,7 +134,7 @@
                 {{ q.category }}
             </span>
             <div class="text-2xl font-black text-gray-900 w-16 text-right">
-              {{ '%.2f'|format(q.avg_score) }}
+              {{ '%.2f'|format(q.score) }}
             </div>
           </div>
         </div>

@@ -160,6 +160,13 @@ from sqlalchemy import or_
 
 from sqlalchemy import select, func, or_
 from app.utils import SURVEY_DETAILS, normalize_survey_name
+from app.utils import (
+    SURVEY_DETAILS, 
+    management_score_category, 
+    client_score_category, 
+    team_score_category
+)
+
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(
@@ -167,122 +174,125 @@ async def admin_dashboard(
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
+    # 1. Configuration for Grading Logic
+    GRADING_MAP = {
+        "MSES": management_score_category,
+        "ICSES": client_score_category,
+        "TSES": team_score_category,
+    }
+
     survey_stats = {}
-    
-    # 1. Initialize stats using Distinct Employee IDs
+
+    # 2. Global Submission Count (Avoids N+1 queries)
+    sub_count_stmt = (
+        select(
+            models.EmployeeSubmission.survey_name, 
+            func.count(func.distinct(models.EmployeeSubmission.employee_id))
+        ).group_by(models.EmployeeSubmission.survey_name)
+    )
+    submission_results = (await session.execute(sub_count_stmt)).all()
+    submission_map = {name: count for name, count in submission_results}
+
+    # 3. Process each survey type defined in your constants
     for s_key, s_info in SURVEY_DETAILS.items():
-        # Count unique employees assigned to this survey type (Short Code OR Full Name)
-        stmt_total = select(func.count(func.distinct(models.SurveyAssignment.employee_id))).where(
-            or_(
-                models.SurveyAssignment.survey_name == s_key,
-                models.SurveyAssignment.survey_name == s_info["full_name"]
+        try:
+            # Get total assigned employees
+            stmt_total = select(func.count(func.distinct(models.SurveyAssignment.employee_id))).where(
+                or_(
+                    models.SurveyAssignment.survey_name == s_key,
+                    models.SurveyAssignment.survey_name == s_info["full_name"]
+                )
             )
-        )
-        total_unique_employees = await session.scalar(stmt_total)
-        
-        if total_unique_employees == 0:
+            total_unique = await session.scalar(stmt_total) or 0
+            
+            if total_unique == 0:
+                continue
+
+            # Calculate submitted count (checks both short key and full name)
+            submitted = submission_map.get(s_key, 0) + submission_map.get(s_info["full_name"], 0)
+            grading_func = GRADING_MAP.get(s_key)
+
+            # Initialize survey data structure
+            survey_stats[s_key] = {
+                "display_name": s_info["full_name"],
+                "total_employees": total_unique,
+                "submitted_employees": submitted,
+                "pending_employees": max(0, total_unique - submitted),
+                "questions": s_info["questions"],
+                "overall_avg": {"score": 0, "category": "N/A"},
+                "dept_avgs": [],
+                "pos_avgs": [],
+                "question_avgs": []
+            }
+
+            # Filter for retrieving response data
+            base_filter = or_(
+                models.SurveyResponse.survey_name == s_key,
+                models.SurveyResponse.survey_name == s_info["full_name"]
+            )
+
+            # --- A. Overall Average & Category ---
+            avg_score = await session.scalar(select(func.avg(models.SurveyResponse.score)).where(base_filter)) or 0
+            survey_stats[s_key]["overall_avg"] = {
+                "score": round(avg_score, 2),
+                "category": grading_func(int(avg_score)) if (grading_func and avg_score > 0) else "N/A"
+            }
+
+            # --- B. Department Averages & Category ---
+            dept_stmt = (
+                select(models.SurveyResponse.department, func.avg(models.SurveyResponse.score))
+                .where(base_filter)
+                .group_by(models.SurveyResponse.department)
+            )
+            dept_res = (await session.execute(dept_stmt)).all()
+            survey_stats[s_key]["dept_avgs"] = [
+                {
+                    "name": r[0],
+                    "score": round(r[1], 2),
+                    "category": grading_func(int(r[1])) if grading_func else "N/A"
+                } for r in dept_res
+            ]
+
+            # --- C. Position Averages & Category ---
+            pos_stmt = (
+                select(models.Employee.position, func.avg(models.SurveyResponse.score))
+                .join(models.EmployeeSubmission, models.SurveyResponse.submission_hash == models.EmployeeSubmission.submission_hash)
+                .join(models.Employee, models.EmployeeSubmission.employee_id == models.Employee.id)
+                .where(base_filter)
+                .group_by(models.Employee.position)
+            )
+            pos_res = (await session.execute(pos_stmt)).all()
+            survey_stats[s_key]["pos_avgs"] = [
+                {
+                    "name": r[0],
+                    "score": round(r[1], 2),
+                    "category": grading_func(int(r[1])) if grading_func else "N/A"
+                } for r in pos_res
+            ]
+
+            # --- D. Individual Question Averages & Category ---
+            q_avg_stmt = (
+                select(models.SurveyResponse.question_no, func.avg(models.SurveyResponse.score))
+                .where(base_filter)
+                .group_by(models.SurveyResponse.question_no)
+            )
+            q_res = (await session.execute(q_avg_stmt)).all()
+            survey_stats[s_key]["question_avgs"] = [
+                {
+                    "question_no": r[0],
+                    "score": round(r[1], 2),
+                    "category": grading_func(int(r[1])) if grading_func else "N/A"
+                } for r in q_res
+            ]
+
+        except Exception as e:
+            print(f"Error processing stats for {s_key}: {e}")
             continue
-        
-        survey_stats[s_key] = {
-            "display_name": s_info["full_name"],
-            "total_employees": total_unique_employees,
-            "submitted_employees": 0,
-            "pending_employees": 0,
-            "overall_avg": 0,
-            "dept_avgs": [],
-            "pos_avgs": [],
-            "question_avgs": [],
-            "questions": s_info["questions"],
-        }
-
-    # 2. Count Distinct Submitted Employees
-    stmt_sub_distinct = select(
-        models.EmployeeSubmission.employee_id,
-        models.EmployeeSubmission.survey_name
-    ).distinct()
-    submitted_pairs = (await session.execute(stmt_sub_distinct)).all()
-    
-    for emp_id, s_name in submitted_pairs:
-        s_type = normalize_survey_name(s_name)
-        if s_type in survey_stats:
-            survey_stats[s_type]["submitted_employees"] += 1
-
-    # 3. Calculate Detailed Averages per Survey Type
-    for s_name, stats in survey_stats.items():
-        stats["pending_employees"] = max(0, stats["total_employees"] - stats["submitted_employees"])
-        
-        # FIND HASHES: Crucial for linking Responses to metadata
-        # We look for hashes in SurveyResponse that match either the short key or the full name
-        type_hashes_stmt = select(models.SurveyResponse.submission_hash).where(
-            or_(
-                models.SurveyResponse.survey_name == s_name,
-                models.SurveyResponse.survey_name == stats["display_name"]
-            )
-        ).distinct()
-        hashes = (await session.execute(type_hashes_stmt)).scalars().all()
-
-        if not hashes:
-            continue
-
-        # --- Overall Average ---
-        avg_stmt = select(func.avg(models.SurveyResponse.score)).where(
-            models.SurveyResponse.submission_hash.in_(hashes)
-        )
-        stats["overall_avg"] = round((await session.scalar(avg_stmt)) or 0, 2)
-
-        # --- Dept Averages (Pulling directly from SurveyResponse) ---
-        dept_stmt = select(
-            models.SurveyResponse.department,
-            func.avg(models.SurveyResponse.score).label("avg_score")
-        ).where(
-            models.SurveyResponse.submission_hash.in_(hashes)
-        ).group_by(models.SurveyResponse.department)
-        stats["dept_avgs"] = (await session.execute(dept_stmt)).all()
-
-        # --- Position Averages (Join through EmployeeSubmission to Employee table) ---
-        # 
-        pos_stmt = (
-            select(
-                models.Employee.position,
-                func.avg(models.SurveyResponse.score).label("avg_score")
-            )
-            .join(models.EmployeeSubmission, models.SurveyResponse.submission_hash == models.EmployeeSubmission.submission_hash)
-            .join(models.Employee, models.EmployeeSubmission.employee_id == models.Employee.id)
-            .where(models.SurveyResponse.submission_hash.in_(hashes))
-            .group_by(models.Employee.position)
-        )
-        stats["pos_avgs"] = (await session.execute(pos_stmt)).all()
-
-        # --- Question Averages ---
-        q_avg_stmt = select(
-            models.SurveyResponse.question_no,
-            func.avg(models.SurveyResponse.score).label("avg_score")
-        ).where(
-            models.SurveyResponse.submission_hash.in_(hashes)
-        ).group_by(models.SurveyResponse.question_no)
-        
-        raw_q_avgs = (await session.execute(q_avg_stmt)).all()
-        
-        # Grading Category Logic
-        grading_func = {
-            "MSES": management_score_category,
-            "ICSES": client_score_category,
-            "TSES": team_score_category
-        }.get(s_name)
-
-        stats["question_avgs"] = [
-            {
-                "question_no": r.question_no,
-                "avg_score": round(r.avg_score, 2),
-                "category": grading_func(int(r.avg_score)) if grading_func else "N/A"
-            } for r in raw_q_avgs
-        ]
 
     return templates.TemplateResponse(
         "admin/dashboard.html", 
         {"request": request, "survey_stats": survey_stats}
     )
-
 
 
 from sqlalchemy import select
@@ -778,26 +788,42 @@ async def resend_invite(
     return RedirectResponse(url="/admin/employees", status_code=303)
 
 from sqlalchemy import delete
+
+from sqlalchemy import delete, select
+
 @app.post("/admin/employees/{employee_id}/toggle")
-async def delete_employee(
+async def toggle_employee(
     request: Request,
     employee_id: int,
     session: AsyncSession = Depends(get_session),
-    admin_id: int = Depends(require_admin),
 ):
-    employee = await session.get(models.Employee, employee_id)
-    if not employee:
-        return RedirectResponse(url="/admin/employees", status_code=303)
-    
-    # Check if there are any pending assignments to resend
-    stmt = delete(models.Employee).where(
-        models.Employee.id == employee_id
+    # 1. Define the subquery to find all hashes linked to this employee
+    # We do this first because once we delete the submissions, the hashes are gone!
+    hashes_stmt = select(models.EmployeeSubmission.submission_hash).where(
+        models.EmployeeSubmission.employee_id == employee_id
     )
-    await session.execute(stmt)
+
+    # 2. Delete survey responses where the hash matches any of the employee's hashes
+    await session.execute(
+        delete(models.SurveyResponse).where(
+            models.SurveyResponse.submission_hash.in_(hashes_stmt)
+        )
+    )
+
+    # 3. Delete from employee_submissions 
+    # (Your model doesn't have ondelete="CASCADE" here, so we do it manually)
+    await session.execute(
+        delete(models.EmployeeSubmission).where(
+            models.EmployeeSubmission.employee_id == employee_id
+        )
+    )
+
+    # 4. Delete the employee (This will cascade to SurveyAssignment)
+    await session.execute(
+        delete(models.Employee).where(models.Employee.id == employee_id)
+    )
 
     await session.commit()
-    
-    
     return RedirectResponse(url="/admin/employees", status_code=303)
 
 
