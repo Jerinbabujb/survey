@@ -777,6 +777,30 @@ async def resend_invite(
     
     return RedirectResponse(url="/admin/employees", status_code=303)
 
+from sqlalchemy import delete
+@app.post("/admin/employees/{employee_id}/toggle")
+async def delete_employee(
+    request: Request,
+    employee_id: int,
+    session: AsyncSession = Depends(get_session),
+    admin_id: int = Depends(require_admin),
+):
+    employee = await session.get(models.Employee, employee_id)
+    if not employee:
+        return RedirectResponse(url="/admin/employees", status_code=303)
+    
+    # Check if there are any pending assignments to resend
+    stmt = delete(models.Employee).where(
+        models.Employee.id == employee_id
+    )
+    await session.execute(stmt)
+
+    await session.commit()
+    
+    
+    return RedirectResponse(url="/admin/employees", status_code=303)
+
+
 
 @app.post("/admin/send-invites")
 async def send_invites(
@@ -793,7 +817,7 @@ async def send_invites(
         exists().where(
             and_(
                 models.SurveyAssignment.employee_id == models.Employee.id,
-                models.SurveyAssignment.invited_at == None
+                models.SurveyAssignment.invited_at != None
             )
         )
     )
