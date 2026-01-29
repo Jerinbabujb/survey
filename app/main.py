@@ -637,6 +637,44 @@ async def import_employees(
         status_code=303
     )
 
+SURVEY_EMAIL_CONTENT = {
+    "TSES": {
+        "subject": "Team Satisfaction Survey – Feedback Request",
+        "intro": (
+            "As part of our ongoing efforts to encourage feedback on non-KPI parameters, "
+            "we kindly request your participation in providing feedback about your line manager, "
+            "<strong>{employee_name}</strong>."
+        ),
+        "value": (
+            "Your feedback is invaluable in helping us identify areas where individuals "
+            "can further improve and grow."
+        ),
+    },
+    "MSES": {
+        "subject": "Management Satisfaction Survey – Feedback Request",
+        "intro": (
+            "As part of our ongoing efforts to encourage feedback on non-KPI parameters, "
+            "we kindly request your participation in providing feedback on your team member, "
+            "<strong>{employee_name}</strong>."
+        ),
+        "value": (
+            "Your feedback plays an important role in identifying individual strengths, "
+            "areas for development, and supporting the overall growth of the team."
+        ),
+    },
+    "ICSES": {
+        "subject": "Internal Customer Satisfaction Survey – Feedback Request",
+        "intro": (
+            "As part of our ongoing efforts to encourage feedback on non-KPI parameters, "
+            "we kindly request your participation in providing feedback on your colleague, "
+            "<strong>{employee_name}</strong>."
+        ),
+        "value": (
+            "This feedback is invaluable in identifying areas where individuals "
+            "can further improve and enhance collaboration across teams."
+        ),
+    },
+}
 
 
 
@@ -655,7 +693,6 @@ async def invite_employee(
     smtp: models.SMTPSettings,
     base_url: str
 ) -> None:
-    # 1. Fetch all assignments
     stmt = (
         select(models.SurveyAssignment)
         .where(models.SurveyAssignment.employee_id == employee.id)
@@ -665,70 +702,88 @@ async def invite_employee(
     assignments = result.scalars().all()
 
     for assignment in assignments:
-        # --- NEW LOGIC START ---
-        # Get the standardized code (e.g., 'Team Satisfaction Survey' -> 'TSES')
-        s_code = normalize_survey_name(assignment.survey_name)
-        
-        # Pull the official full name from your utils.py mapping
-        # Fallback to the database value if for some reason it's not in our mapping
-        survey_info = SURVEY_DETAILS.get(s_code, {})
-        full_display_name = survey_info.get("full_name", assignment.survey_name)
-        # --- NEW LOGIC END ---
+        # Normalize survey name
+        survey_code = normalize_survey_name(assignment.survey_name)
+        survey_info = SURVEY_DETAILS.get(survey_code, {})
+        email_cfg = SURVEY_EMAIL_CONTENT.get(survey_code)
 
-        # 2. Token generation
+        if not email_cfg:
+            continue  # Safety fallback
+
         token = secrets.token_urlsafe(32)
         assignment.invite_token_hash = hash_token(token)
-        assignment.invited_at = dt.datetime.utcnow() 
-        
-        link = f"{base_url}/survey/{token}"
+        assignment.invited_at = dt.datetime.utcnow()
 
-        # 3. Prepare the Email HTML
-        # Note: Using {full_display_name} in the paragraph below
+        link = f"{base_url}/survey/{token}"
+        deadline = "12th Feb 2026"
+
+        # Build email HTML (same design, updated content)
         html = f"""
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Survey Invitation</title>
+  <title>{email_cfg['subject']}</title>
 </head>
 <body style="margin:0; padding:0; background-color:#000000; font-family: Arial, Helvetica, sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#000000; padding:40px 0;">
     <tr>
       <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#a99a68; border-radius:8px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+        <table width="600" cellpadding="0" cellspacing="0"
+               style="background-color:#a99a68; border-radius:8px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+          
           <tr>
             <td style="background-color:#000000; padding:24px; text-align:center;">
-              <h1 style="margin:0; color:#a99a68; font-size:22px;">You’re Invited</h1>
+              <h1 style="margin:0; color:#a99a68; font-size:22px;">Survey Invitation</h1>
             </td>
           </tr>
+
           <tr>
             <td style="padding:32px; color:#000000;">
-              <p style="font-size:16px; line-height:1.6; margin-top:0;">
-                Hello {assignment.manager_name},
+              <p style="font-size:16px;">Dear {assignment.manager_name},</p>
+
+              <p style="font-size:15px; line-height:1.6;">
+                {email_cfg['intro'].format(employee_name=employee.name)}
               </p>
-              <p>You have been requested to fill out the <strong>{full_display_name}</strong> 
-              for <strong>{employee.name}</strong> ({employee.position}).</p>
+
+              <p style="font-size:15px; line-height:1.6;">
+                {email_cfg['value']}
+              </p>
+
+              <p style="font-size:14px;">
+                <strong>Please note:</strong> All responses are completely anonymous, and no
+                individual-level details will be shared.
+              </p>
+
+              <p style="font-size:14px;">
+                Kindly ensure that the survey is completed by <strong>{deadline}</strong>.
+              </p>
+
               <div style="text-align:center; margin:32px 0;">
                 <a href="{link}"
-                   style="background-color:#000000; color:#a99a68; text-decoration:none; padding:14px 28px; font-size:16px; border-radius:6px; display:inline-block;">
+                   style="background-color:#000000; color:#a99a68; text-decoration:none;
+                          padding:14px 28px; font-size:16px; border-radius:6px; display:inline-block;">
                   Start Survey
                 </a>
               </div>
-              <p style="font-size:14px; color:#000000; line-height:1.6;">
+
+              <p style="font-size:13px;">
                 If the button above doesn’t work, please copy the link below:
               </p>
-              <p style="font-size:14px; word-break:break-all;">
-                <a href="{link}" style="color:#000000; text-decoration:underline;">{link}</a>
+
+              <p style="font-size:13px; word-break:break-all;">
+                <a href="{link}" style="color:#000000;">{link}</a>
               </p>
             </td>
           </tr>
+
           <tr>
-            <td style="background-color:#000000; padding:20px; text-align:center; font-size:12px; color:#a99a68;">
-              <p style="margin:0;">
-                © {dt.datetime.utcnow().year} InfinityCapital. All rights reserved.
-              </p>
+            <td style="background-color:#000000; padding:20px; text-align:center;
+                       font-size:12px; color:#a99a68;">
+              © {dt.datetime.utcnow().year} InfinityCapital. All rights reserved.
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
@@ -737,7 +792,6 @@ async def invite_employee(
 </html>
 """
 
-        # 4. Send the email
         await send_email(
             host=smtp.host,
             port=smtp.port,
@@ -747,12 +801,12 @@ async def invite_employee(
             from_email=smtp.from_email,
             from_name=smtp.from_name,
             to_email=assignment.manager_email,
-            subject=f"Survey Request: {full_display_name} for {employee.name}",
+            subject=email_cfg["subject"],
             html_content=html,
         )
 
-    # 5. Commit changes
     await session.commit()
+
 
 
 
