@@ -1,3 +1,4 @@
-tester,tester1@infinitycapital.com,IT,"Management Satisfaction Evaluation Survey,Internal Customer Satisfaction Evaluation Survey, Team Satisfaction Evaluation Survey",developer
-tester1,tester2@infinitycapital.com.com,accounts,"Internal Customer Satisfaction Evaluation Survey, Team Satisfaction Evaluation Survey",developer
-tester3,tester3@infinitycapital.com.com,design,"Internal Customer Satisfaction Evaluation Survey, Team Satisfaction Evaluation Survey",developer
+Survey Name,Employee Name,Position,Department Name,Reporting Line,Reporting Line Email IDs,Employee Email
+MSES,tester,developer,IT,"test manager1, testManager2","jerin.fospe@gmail.com, jerinbabu@fospe.com",jeriabujb007@gmail.com
+ICSES,tester,developer,IT,"test manager1, testManager2","jerin.fospe@gmail.com, jerinbabu@fospe.com",jeriabujb007@gmail.com
+TSES,tester,developer,IT,"test manager1, testManager2","jerin.fospe@gmail.com, jerinbabu@fospe.com",jeriabujb007@gmail.com

@@ -459,7 +459,7 @@ async def add_employee(
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
-    # Clean and normalize inputs
+    # Clean and normalize inputs 
     name = name.strip()
     email = email.strip().lower()
     department = department.strip()
@@ -497,14 +497,15 @@ async def add_employee(
             m_name = mgr_names[i] if i < len(mgr_names) else "Manager"
 
             # Check if this specific assignment already exists to prevent unique constraint errors
-            assign_stmt = select(models.SurveyAssignment).where(
-                and_(
-                    models.SurveyAssignment.employee_id == employee.id,
-                    models.SurveyAssignment.manager_email == m_email,
-                    models.SurveyAssignment.survey_name == survey
-                )
+            assignment_stmt = select(models.SurveyAssignment).join(models.Employee).where(
+              and_(
+                   models.Employee.email == employee.email,
+                   models.SurveyAssignment.manager_email == m_email,
+                   models.SurveyAssignment.survey_name == survey
+                 )
             )
-            existing_assign = (await session.execute(assign_stmt)).scalars().first()
+            existing_assign = (await session.execute(assignment_stmt)).scalars().first()
+
 
             if not existing_assign:
                 # Generate a unique token for the email link
@@ -517,11 +518,11 @@ async def add_employee(
                     invite_token_hash=hash_token(token),
                 )
                 session.add(assignment)
-
+    await session.flush()
     await session.commit()
     
     # Redirect back to directory with success flag
-    return RedirectResponse(url="/admin/employees?added_single=1", status_code=303)
+    return RedirectResponse(url=f"/admin/employees?added_single=1&new_id={employee.id}", status_code=303)
 
 
 
@@ -880,6 +881,32 @@ async def toggle_employee(
     await session.commit()
     return RedirectResponse(url="/admin/employees", status_code=303)
 
+@app.post("/admin/employees/{employee_id}/send-invite")
+async def send_single_invite(
+    employee_id: int,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    admin_id: int = Depends(require_admin),
+):
+    smtp = await get_smtp(session)
+    base_url = str(request.base_url).rstrip("/")
+
+    # Fetch ONLY this specific employee
+    stmt = select(models.Employee).where(models.Employee.id == employee_id)
+    result = await session.execute(stmt)
+    employee = result.scalar_one_or_none()
+
+    if not employee:
+        return RedirectResponse(url="/admin/employees?error=Employee+not+found", status_code=303)
+
+    # Trigger the email for just this person
+    await invite_employee(session, employee, smtp, base_url)
+    await session.commit()
+
+    return RedirectResponse(
+        url=f"/admin/employees?invited=1&invited_count=1", 
+        status_code=303
+    )
 
 
 @app.post("/admin/send-invites")
