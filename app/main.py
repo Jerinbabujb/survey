@@ -201,24 +201,35 @@ async def admin_dashboard(
     for s_key, s_info in SURVEY_DETAILS.items():
         grading_func = GRADING_MAP.get(s_key)
 
-        # 1. Assignment Stats
+        # 1. Get Assignment Stats (Total assigned vs Pending)
         assign_stmt = select(models.SurveyAssignment).where(models.SurveyAssignment.survey_name == s_key)
         assignments = (await session.execute(assign_stmt)).scalars().all()
-        if not assignments: continue
+        if not assignments: 
+            continue
 
-        # 2. Results Query (Grouping by Employee & Submission)
+        # 2. Results Query: Grouping by Employee to handle multiple submissions
+        # STEP A: Get total score for EACH unique submission_hash
+        sub_stmt = (
+            select(
+                models.EmployeeSubmission.employee_id,
+                func.sum(models.SurveyResponse.score).label("submission_total")
+            )
+            .join(models.SurveyResponse, models.EmployeeSubmission.submission_hash == models.SurveyResponse.submission_hash)
+            .where(models.EmployeeSubmission.survey_name == s_key)
+            .group_by(models.EmployeeSubmission.submission_hash, models.EmployeeSubmission.employee_id)
+        ).subquery()
+
+        # STEP B: Average those totals for each Employee
         stmt = (
             select(
                 models.Employee.name,
                 models.Employee.department,
                 models.Employee.position,
-                func.sum(models.SurveyResponse.score).label("total_score")
+                func.avg(sub_stmt.c.submission_total).label("avg_total_score"),
+                func.count(sub_stmt.c.employee_id).label("submission_count")
             )
-            .join(models.EmployeeSubmission, models.Employee.id == models.EmployeeSubmission.employee_id)
-            .join(models.SurveyResponse, models.EmployeeSubmission.submission_hash == models.SurveyResponse.submission_hash)
-            .where(models.EmployeeSubmission.survey_name == s_key)
-            .group_by(models.EmployeeSubmission.submission_hash, models.Employee.id, models.Employee.name,models.Employee.department,
-                models.Employee.position )
+            .join(sub_stmt, models.Employee.id == sub_stmt.c.employee_id)
+            .group_by(models.Employee.id, models.Employee.name, models.Employee.department, models.Employee.position)
         )
         
         results = (await session.execute(stmt)).all()
@@ -229,7 +240,7 @@ async def admin_dashboard(
         individual_scores = []
 
         for r in results:
-            score = float(r.total_score)
+            score = float(r.avg_total_score)
             all_scores.append(score)
             dept_data.setdefault(r.department, []).append(score)
             pos_data.setdefault(r.position, []).append(score)
@@ -239,13 +250,18 @@ async def admin_dashboard(
                 "department": r.department,
                 "position": r.position,
                 "score": score,
+                "submission_count": r.submission_count,
                 "category": grading_func(score) if grading_func else "N/A"
             })
 
-        overall_avg = sum(all_scores) / len(all_scores) if all_scores else 0
+        overall_avg_val = sum(all_scores) / len(all_scores) if all_scores else 0
 
-        # 3. Question Stats
-        q_avg_stmt = select(models.SurveyResponse.question_no, func.avg(models.SurveyResponse.score)).where(models.SurveyResponse.survey_name == s_key).group_by(models.SurveyResponse.question_no)
+        # 3. Question Stats (Average score per question across all submissions)
+        q_avg_stmt = (
+            select(models.SurveyResponse.question_no, func.avg(models.SurveyResponse.score))
+            .where(models.SurveyResponse.survey_name == s_key)
+            .group_by(models.SurveyResponse.question_no)
+        )
         q_results = (await session.execute(q_avg_stmt)).all()
 
         survey_stats[s_key] = {
@@ -254,7 +270,7 @@ async def admin_dashboard(
             "submitted_employees": sum(1 for a in assignments if a.is_submitted),
             "pending_employees": len(assignments) - sum(1 for a in assignments if a.is_submitted),
             "questions": s_info["questions"],
-            "overall_avg": {"score": overall_avg, "category": grading_func(overall_avg)},
+            "overall_avg": {"score": overall_avg_val, "category": grading_func(overall_avg_val)},
             "dept_avgs": [{"name": d, "score": sum(s)/len(s), "category": grading_func(sum(s)/len(s))} for d, s in dept_data.items()],
             "pos_avgs": [{"name": p, "score": sum(s)/len(s), "category": grading_func(sum(s)/len(s))} for p, s in pos_data.items()],
             "question_avgs": sorted([{"question_no": qno, "score": avg, "category": grading_func(avg)} for qno, avg in q_results], key=lambda x: x["question_no"]),

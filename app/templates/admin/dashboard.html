@@ -159,26 +159,32 @@
                       </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-50 bg-white">
-                      {% for emp in stats.individual_scores %}
-                      <tr class="hover:bg-emerald-50/30 transition-colors">
-                          
-                          <td class="px-6 py-4 font-semibold text-gray-800">{{ emp.name }}</td>
-                          <td class="px-6 py-4 font-semibold text-gray-800">{{ emp.department }}</td>
-                          <td class="px-6 py-4 font-semibold text-gray-800">{{ emp.position }}</td>
-                          <td class="px-6 py-4 text-center">
-                              <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter
-                                  {% if emp.category == 'Outstanding' %} bg-blue-100 text-blue-700
-                                  {% elif emp.category == 'Exceeds Target' %} bg-emerald-100 text-emerald-700
-                                  {% elif emp.category == 'Meets Target' %} bg-amber-100 text-amber-700
-                                  {% else %} bg-rose-100 text-rose-700 {% endif %} shadow-sm">
-                                  {{ emp.category }}
-                              </span>
-                          </td>
-                          <td class="px-6 py-4 text-right">
-                              <span class="text-lg font-black text-gray-900">{{ '%.2f'|format(emp.score) }}</span>
-                          </td>
-                      </tr>
-                      {% endfor %}
+                     {% for emp in stats.individual_scores %}
+<tr class="hover:bg-emerald-50/30 transition-colors">
+    <td class="px-6 py-4 font-semibold text-gray-800">
+        {{ emp.name }}
+        {% if emp.submission_count > 1 %}
+        <span class="ml-2 text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full" title="Averaged from {{ emp.submission_count }} submissions">
+            {{ emp.submission_count }} entries
+        </span>
+        {% endif %}
+    </td>
+    <td class="px-6 py-4 text-gray-600">{{ emp.department }}</td>
+    <td class="px-6 py-4 text-gray-600">{{ emp.position }}</td>
+    <td class="px-6 py-4 text-center">
+        <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter
+            {% if emp.category == 'Outstanding' %} bg-blue-100 text-blue-700
+            {% elif emp.category == 'Exceeds Target' %} bg-emerald-100 text-emerald-700
+            {% elif emp.category == 'Meets Target' %} bg-amber-100 text-amber-700
+            {% else %} bg-rose-100 text-rose-700 {% endif %} shadow-sm">
+            {{ emp.category }}
+        </span>
+    </td>
+    <td class="px-6 py-4 text-right">
+        <span class="text-lg font-black text-gray-900">{{ '%.2f'|format(emp.score) }}</span>
+    </td>
+</tr>
+{% endfor %}
                   </tbody>
               </table>
           </div>
