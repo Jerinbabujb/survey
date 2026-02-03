@@ -87,9 +87,13 @@
                   {% for row in stats.pos_avgs %}
                   <tr class="hover:bg-purple-50/50 transition-colors">
                     <td class="py-4 font-semibold text-gray-700">{{ row.name }}</td>
+                  
                     <td class="py-4 text-right">
                         <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg font-black">{{ '%.2f'|format(row.score) }}</span>
-                       
+                       <span class="text-sm {% if row.category == 'Outstanding' %} bg-blue-100 text-blue-700
+            {% elif row.category == 'Exceeds Target' %} bg-emerald-100 text-emerald-700
+            {% elif row.category == 'Meets Target' %} bg-amber-100 text-amber-700
+            {% else %} bg-rose-100 text-rose-700 {% endif %}">{{ row.category }}</span>
                     </td>
                   </tr>
                   {% endfor %}
