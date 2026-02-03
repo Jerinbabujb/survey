@@ -168,28 +168,39 @@
                         <div class="border border-gray-200 rounded-xl shadow-sm overflow-hidden">
 
                             <!-- Manager Header with Submitted/Pending -->
-                            {% set total_surveys = m_data.surveys | length %}
-                            {% set submitted_surveys = m_data.surveys | selectattr('is_submitted') | list | length %}
-                            <div @click="openGroup = (openGroup === '{{ loop.index }}' ? null : '{{ loop.index }}')"
-                                 class="bg-gray-50 px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors">
-                                <div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
-                                    <span class="text-base font-semibold text-gray-800">{{ m_data.manager_name }}</span>
-                                    <span class="text-sm text-gray-500 font-mono">{{ m_email }}</span>
-                                    <span class="text-xs text-gray-600 font-semibold ml-2">
-                                        Submitted: {{ submitted_surveys }} / {{ total_surveys }}
-                                        {% if submitted_surveys < total_surveys %}
-                                        <span class="text-amber-600 italic">(Pending {{ total_surveys - submitted_surveys }})</span>
-                                        {% endif %}
-                                    </span>
-                                </div>
-                                <div class="flex items-center gap-3">
-                                    <span class="text-xs font-bold px-2 py-1 rounded border border-gray-300 bg-gray-200 text-gray-800">{{ total_surveys }} Surveys</span>
-                                    <svg class="w-5 h-5 text-gray-400 transform transition-transform"
-                                         :class="openGroup === '{{ loop.index }}' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path d="M19 9l-7 7-7-7"></path>
-                                    </svg>
-                                </div>
-                            </div>
+                           {% set total_surveys = m_data.surveys | length %}
+{% set submitted_surveys = m_data.surveys | selectattr('is_submitted') | list | length %}
+{% set is_fully_submitted = submitted_surveys == total_surveys %}
+
+<div @click="openGroup = (openGroup === '{{ loop.index }}' ? null : '{{ loop.index }}')"
+     class="bg-gray-50 px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors">
+    <div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
+        
+        {# ANONYMITY LOGIC STARTS HERE #}
+        {% if is_fully_submitted %}
+            <span class="text-base font-bold text-gray-400 italic">Anonymous Responder</span>
+            <span class="text-xs text-gray-300 font-mono">[Email Hidden for Privacy]</span>
+        {% else %}
+            <span class="text-base font-semibold text-gray-800">{{ m_data.manager_name }}</span>
+            <span class="text-sm text-gray-500 font-mono">{{ m_email }}</span>
+        {% endif %}
+        {# ANONYMITY LOGIC ENDS HERE #}
+
+        <span class="text-xs text-gray-600 font-semibold ml-2">
+            Submitted: {{ submitted_surveys }} / {{ total_surveys }}
+            {% if submitted_surveys < total_surveys %}
+                <span class="text-amber-600 italic">(Pending {{ total_surveys - submitted_surveys }})</span>
+            {% endif %}
+        </span>
+    </div>
+    <div class="flex items-center gap-3">
+        <span class="text-xs font-bold px-2 py-1 rounded border border-gray-300 bg-gray-200 text-gray-800">{{ total_surveys }} Surveys</span>
+        <svg class="w-5 h-5 text-gray-400 transform transition-transform"
+             :class="openGroup === '{{ loop.index }}' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M19 9l-7 7-7-7"></path>
+        </svg>
+    </div>
+</div>
 
                             <!-- Surveys List -->
                             <div x-show="openGroup === '{{ loop.index }}'" x-collapse x-cloak class="bg-white p-4 space-y-3 border-t border-gray-100">

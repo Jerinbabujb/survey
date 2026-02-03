@@ -728,7 +728,7 @@ async def invite_employee(
         assignment.invited_at = dt.datetime.utcnow()
 
         link = f"{base_url}/survey/{token}"
-        deadline = "12th Feb 2026"
+        deadline = "10th Feb 2026"
 
         # Build email HTML (same design, updated content)
         html = f"""
