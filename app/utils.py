@@ -1,3 +1,10 @@
+import hashlib
+from typing import List
+
+# ===============================
+# Survey Questions
+# ===============================
+
 QUESTIONS = [
     "How satisfied are you with the overall performance of the employee?",
     "How effectively does the employee align their team’s objectives with overall company strategy?",
@@ -19,7 +26,7 @@ CLIENT_QNS = [
     "How often does the employee proactively identify and address opportunities for improvement?",
 ]
 
-TEAM_QNS=[
+TEAM_QNS = [
     "How satisfied are you with the support provided by your line manager for achieving your goals?",
     "Do you believe that your line manager communicates the organization's vision clearly?",
     "How approachable do you find your line manager when you have concerns or issues?",
@@ -38,6 +45,10 @@ TEAM_QNS=[
     "Do you have the required resources within the department for completion of tasks?",
 ]
 
+# ===============================
+# Survey Metadata
+# ===============================
+
 SURVEY_DETAILS = {
     "MSES": {
         "full_name": "Management Satisfaction Survey",
@@ -53,23 +64,37 @@ SURVEY_DETAILS = {
     }
 }
 
+# ===============================
+# Normalize Survey Name
+# ===============================
+
 def normalize_survey_name(input_name: str) -> str:
-    """Standardizes input to MSES, ICSES, or TSES."""
-    if not input_name: return ""
+    """
+    Standardizes input to MSES, ICSES, or TSES.
+    Accepts either short code or full survey name.
+    """
+    if not input_name:
+        return ""
+
     name = input_name.strip().upper()
-    
+
     # Check short codes
     if name in SURVEY_DETAILS:
         return name
-        
+
     # Check full names
     for key, data in SURVEY_DETAILS.items():
-        if name == data["full_name"].upper():
+        if name == data["full_name"].upper() \
+           or name == data["full_name"].replace(" Survey", "").upper():  # optional shorthand
             return key
+
+    # If no match, return as-is (or raise error later)
     return name
 
-def hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode('utf-8')).hexdigest()
+# ===============================
+# Score Mapping
+# ===============================
+
 SCORES = {
     5: "Strongly Agree",
     4: "Agree",
@@ -78,8 +103,19 @@ SCORES = {
     1: "Strongly Disagree",
 }
 
+# ===============================
+# Hashing Utility
+# ===============================
 
-# Management Satisfaction Evaluation Survey
+def hash_token(token: str) -> str:
+    """Generate a SHA-256 hash of a given token."""
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
+
+# ===============================
+# Survey Scoring and Descriptions
+# ===============================
+
+# ---- Management Satisfaction Survey ----
 def management_score_category(total: int) -> str:
     if 36 <= total <= 40:
         return "Outstanding"
@@ -100,8 +136,7 @@ def management_score_description(total: int) -> str:
     else:
         return "Performance below expectations; improvement needed in leadership, support, or communication."
 
-
-# Internal Customer Satisfaction Evaluation Survey
+# ---- Internal Customer Satisfaction Survey ----
 def client_score_category(total: int) -> str:
     if 32 <= total <= 35:
         return "Outstanding"
@@ -113,17 +148,16 @@ def client_score_category(total: int) -> str:
         return "Below Target"
 
 def client_score_description(total: int) -> str:
-    if 36 <= total <= 40:
-        return "Exceptional leadership, highly supportive, inspires and motivates the team consistently."
-    elif 29 <= total <= 35:
-        return "Frequently goes beyond expectations, provides strong support and communication."
-    elif 20 <= total <= 28:
-        return "Performs at expected level, provides adequate support, guidance, and communication."
+    if 32 <= total <= 35:
+        return "Exceptional support; consistently meets client needs and provides strong communication."
+    elif 26 <= total <= 31:
+        return "Frequently goes beyond expectations; provides strong support and communication."
+    elif 18 <= total <= 25:
+        return "Performs at expected level; provides adequate support and responsiveness."
     else:
-        return "Performance below expectations, needs improvement in support, communication, or leadership."
+        return "Performance below expectations; improvement needed in support or communication."
 
-
-# Team Satisfaction Evaluation Survey
+# ---- Team Satisfaction Survey ----
 def team_score_category(total: int) -> str:
     if 75 <= total <= 80:
         return "Outstanding"
@@ -144,51 +178,72 @@ def team_score_description(total: int) -> str:
     else:
         return "Performance below expectations, needs improvement in support, communication, or leadership."
 
-from typing import Optional, Iterable
+# ===============================
+# Score Calculation
+# ===============================
 
-
-from typing import List
-
-def weighted_score(score: int, survey_questions: List[str]) -> int:
+def calculate_total_score(scores: List[int]) -> int:
     """
-    Multiply the score of each question by the total number of questions in that survey.
+    Calculate total score by summing all question scores.
+    No weighting applied.
     """
-    num_questions = len(survey_questions)
-    return score * num_questions
+    return sum(scores)
 
 
+from typing import Dict, List
+from collections import defaultdict
 
+from app.utils import SURVEY_DETAILS, management_score_category, client_score_category, team_score_category
 
+GRADING_FUNCTIONS = {
+    "MSES": management_score_category,
+    "ICSES": client_score_category,
+    "TSES": team_score_category,
+}
 
+def aggregate_employee_scores(employee):
+    """
+    Returns a dict like:
+    {
+        "MSES": {"num_submissions": 3, "total_score": 87, "avg_score": 29, "category": "Exceeds Target"},
+        "ICSES": {...},
+    }
+    """
+    result = {}
 
+    # Iterate all manager summaries
+    for manager_data in getattr(employee, "manager_summary", {}).values():
+        for survey in manager_data["surveys"]:
+            s_code = survey["survey_name"]
+            res = survey.get("result")
+            if not res:
+                continue
 
+            total_score = res.get("total_score", 0)
+            if s_code not in result:
+                result[s_code] = {
+                    "num_submissions": 0,
+                    "total_score": 0,
+                    "avg_score": 0,
+                    "category": "N/A"
+                }
 
-import hashlib
+            result[s_code]["num_submissions"] += 1
+            result[s_code]["total_score"] += total_score
 
-def hash_token(token: str) -> str:
-    """Generate a SHA-256 hash of a given token."""
-    return hashlib.sha256(token.encode('utf-8')).hexdigest()
+    # Compute average and category
+    for s_code, data in result.items():
+        if data["num_submissions"] > 0:
+            data["avg_score"] = round(data["total_score"] / data["num_submissions"], 2)
+            grading_func = GRADING_FUNCTIONS.get(s_code)
+            if grading_func:
+                data["category"] = grading_func(data["avg_score"])
+            else:
+                data["category"] = "N/A"
+        else:
+            data["avg_score"] = 0
+            data["category"] = "N/A"
 
-
-def get_score_category(score: int) -> str:
-    if 41 <= score <= 45:
-        return "Outstanding"
-    elif 32 <= score <= 40:
-        return "Exceeds Target"
-    elif 23 <= score <= 31:
-        return "Meets Target"
-    else:  # 10–25
-        return "Below Target"
-
-
-def get_score_category_score(score: int) -> str:
-    if 41 <= score <= 45:
-        return "Exceptional leadership, highly supportive, inspires and motivates the team consistently."
-    elif 32 <= score <= 40:
-        return "Frequently goes beyond expectations, provides strong support and communication."
-    elif 23 <= score <= 31:
-        return "Performs at expected level, provides adequate support, guidance, and communication."
-    else:  # 10–25
-        return "Performance below expectations, needs improvement in support, communication, or leadership."
+    return result
 
 

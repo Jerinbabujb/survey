@@ -20,11 +20,10 @@ from app.config import settings
 from app.db import Base, engine, get_session
 from app.email import send_email
 from app.security import get_password_hash, hash_token, verify_password
-from app.utils import QUESTIONS,hash_token, get_score_category,  CLIENT_QNS, TEAM_QNS, SCORES, management_score_category, management_score_description, client_score_category, client_score_description, team_score_category, team_score_description
+from app.utils import QUESTIONS,hash_token,  CLIENT_QNS, TEAM_QNS, SCORES, management_score_category, management_score_description, client_score_category, client_score_description, team_score_category, team_score_description
 from fastapi import Query
 
 from app.models import Employee, EmployeeSubmission, SurveyResponse
-from app.utils import weighted_score, get_score_category, get_score_category_score
 from sqlalchemy import join
 from sqlalchemy import distinct
 from fastapi import UploadFile, File, Form, HTTPException
@@ -168,13 +167,29 @@ from app.utils import (
 )
 
 
+from fastapi import Depends
+from fastapi.responses import HTMLResponse
+from sqlalchemy import select, func, or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.templating import Jinja2Templates
+from fastapi.requests import Request
+from app import models
+from app.utils import management_score_category, client_score_category, team_score_category
+
+
+from sqlalchemy import select, func
+from fastapi import Depends, Request
+from fastapi.responses import HTMLResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from app import models
+from app.utils import SURVEY_DETAILS, management_score_category, client_score_category, team_score_category
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(
     request: Request,
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
-    # 1. Configuration for Grading Logic
     GRADING_MAP = {
         "MSES": management_score_category,
         "ICSES": client_score_category,
@@ -183,127 +198,84 @@ async def admin_dashboard(
 
     survey_stats = {}
 
-    # 2. Global Submission Count (Avoids N+1 queries)
-    sub_count_stmt = (
-        select(
-            models.EmployeeSubmission.survey_name, 
-            func.count(func.distinct(models.EmployeeSubmission.employee_id))
-        ).group_by(models.EmployeeSubmission.survey_name)
-    )
-    submission_results = (await session.execute(sub_count_stmt)).all()
-    submission_map = {name: count for name, count in submission_results}
-
-    # 3. Process each survey type defined in your constants
     for s_key, s_info in SURVEY_DETAILS.items():
-        try:
-            # Get total assigned employees
-            stmt_total = select(func.count(func.distinct(models.SurveyAssignment.employee_id))).where(
-                or_(
-                    models.SurveyAssignment.survey_name == s_key,
-                    models.SurveyAssignment.survey_name == s_info["full_name"]
-                )
+        grading_func = GRADING_MAP.get(s_key)
+
+        # 1. Assignment Stats
+        assign_stmt = select(models.SurveyAssignment).where(models.SurveyAssignment.survey_name == s_key)
+        assignments = (await session.execute(assign_stmt)).scalars().all()
+        if not assignments: continue
+
+        # 2. Results Query (Grouping by Employee & Submission)
+        stmt = (
+            select(
+                models.Employee.name,
+                models.Employee.department,
+                models.Employee.position,
+                func.sum(models.SurveyResponse.score).label("total_score")
             )
-            total_unique = await session.scalar(stmt_total) or 0
+            .join(models.EmployeeSubmission, models.Employee.id == models.EmployeeSubmission.employee_id)
+            .join(models.SurveyResponse, models.EmployeeSubmission.submission_hash == models.SurveyResponse.submission_hash)
+            .where(models.EmployeeSubmission.survey_name == s_key)
+            .group_by(models.EmployeeSubmission.submission_hash, models.Employee.id, models.Employee.name,models.Employee.department,
+                models.Employee.position )
+        )
+        
+        results = (await session.execute(stmt)).all()
+        
+        all_scores = []
+        dept_data = {}
+        pos_data = {}
+        individual_scores = []
+
+        for r in results:
+            score = float(r.total_score)
+            all_scores.append(score)
+            dept_data.setdefault(r.department, []).append(score)
+            pos_data.setdefault(r.position, []).append(score)
             
-            if total_unique == 0:
-                continue
+            individual_scores.append({
+                "name": r.name,
+                "department": r.department,
+                "position": r.position,
+                "score": score,
+                "category": grading_func(score) if grading_func else "N/A"
+            })
 
-            # Calculate submitted count (checks both short key and full name)
-            submitted = submission_map.get(s_key, 0) + submission_map.get(s_info["full_name"], 0)
-            grading_func = GRADING_MAP.get(s_key)
+        overall_avg = sum(all_scores) / len(all_scores) if all_scores else 0
 
-            # Initialize survey data structure
-            survey_stats[s_key] = {
-                "display_name": s_info["full_name"],
-                "total_employees": total_unique,
-                "submitted_employees": submitted,
-                "pending_employees": max(0, total_unique - submitted),
-                "questions": s_info["questions"],
-                "overall_avg": {"score": 0, "category": "N/A"},
-                "dept_avgs": [],
-                "pos_avgs": [],
-                "question_avgs": []
-            }
+        # 3. Question Stats
+        q_avg_stmt = select(models.SurveyResponse.question_no, func.avg(models.SurveyResponse.score)).where(models.SurveyResponse.survey_name == s_key).group_by(models.SurveyResponse.question_no)
+        q_results = (await session.execute(q_avg_stmt)).all()
 
-            # Filter for retrieving response data
-            base_filter = or_(
-                models.SurveyResponse.survey_name == s_key,
-                models.SurveyResponse.survey_name == s_info["full_name"]
-            )
+        survey_stats[s_key] = {
+            "display_name": s_info["full_name"],
+            "total_employees": len(assignments),
+            "submitted_employees": sum(1 for a in assignments if a.is_submitted),
+            "pending_employees": len(assignments) - sum(1 for a in assignments if a.is_submitted),
+            "questions": s_info["questions"],
+            "overall_avg": {"score": overall_avg, "category": grading_func(overall_avg)},
+            "dept_avgs": [{"name": d, "score": sum(s)/len(s), "category": grading_func(sum(s)/len(s))} for d, s in dept_data.items()],
+            "pos_avgs": [{"name": p, "score": sum(s)/len(s), "category": grading_func(sum(s)/len(s))} for p, s in pos_data.items()],
+            "question_avgs": sorted([{"question_no": qno, "score": avg, "category": grading_func(avg)} for qno, avg in q_results], key=lambda x: x["question_no"]),
+            "individual_scores": sorted(individual_scores, key=lambda x: x['score'], reverse=True)
+        }
 
-            # --- A. Overall Average & Category ---
-            avg_score = await session.scalar(select(func.avg(models.SurveyResponse.score)).where(base_filter)) or 0
-            survey_stats[s_key]["overall_avg"] = {
-                "score": round(avg_score, 2),
-                "category": grading_func(int(avg_score)) if (grading_func and avg_score > 0) else "N/A"
-            }
-
-            # --- B. Department Averages & Category ---
-            dept_stmt = (
-                select(models.SurveyResponse.department, func.avg(models.SurveyResponse.score))
-                .where(base_filter)
-                .group_by(models.SurveyResponse.department)
-            )
-            dept_res = (await session.execute(dept_stmt)).all()
-            survey_stats[s_key]["dept_avgs"] = [
-                {
-                    "name": r[0],
-                    "score": round(r[1], 2),
-                    "category": grading_func(int(r[1])) if grading_func else "N/A"
-                } for r in dept_res
-            ]
-
-            # --- C. Position Averages & Category ---
-            pos_stmt = (
-                select(models.Employee.position, func.avg(models.SurveyResponse.score))
-                .join(models.EmployeeSubmission, models.SurveyResponse.submission_hash == models.EmployeeSubmission.submission_hash)
-                .join(models.Employee, models.EmployeeSubmission.employee_id == models.Employee.id)
-                .where(base_filter)
-                .group_by(models.Employee.position)
-            )
-            pos_res = (await session.execute(pos_stmt)).all()
-            survey_stats[s_key]["pos_avgs"] = [
-                {
-                    "name": r[0],
-                    "score": round(r[1], 2),
-                    "category": grading_func(int(r[1])) if grading_func else "N/A"
-                } for r in pos_res
-            ]
-
-            # --- D. Individual Question Averages & Category ---
-            q_avg_stmt = (
-                select(models.SurveyResponse.question_no, func.avg(models.SurveyResponse.score))
-                .where(base_filter)
-                .group_by(models.SurveyResponse.question_no)
-            )
-            q_res = (await session.execute(q_avg_stmt)).all()
-            survey_stats[s_key]["question_avgs"] = [
-                {
-                    "question_no": r[0],
-                    "score": round(r[1], 2),
-                    "category": grading_func(int(r[1])) if grading_func else "N/A"
-                } for r in q_res
-            ]
-
-        except Exception as e:
-            print(f"Error processing stats for {s_key}: {e}")
-            continue
-
-    return templates.TemplateResponse(
-        "admin/dashboard.html", 
-        {"request": request, "survey_stats": survey_stats}
-    )
+    return templates.TemplateResponse("admin/dashboard.html", {"request": request, "survey_stats": survey_stats})
 
 
-from sqlalchemy import select
+from fastapi import Request, Depends
+from fastapi.responses import HTMLResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-import datetime as dt
-
+from app import models
 from app.utils import (
     SURVEY_DETAILS, 
     management_score_category, 
     client_score_category, 
-    team_score_category
+    team_score_category,
+    aggregate_employee_scores
 )
 
 @app.get("/admin/employees", response_class=HTMLResponse)
@@ -318,37 +290,29 @@ async def admin_employees(
     invited_count: int | None = None,
     reminded: int | None = None,
 ):
-    # 1. Fetch Employees with their assignments
-    stmt = (
-        select(models.Employee)
-        .options(selectinload(models.Employee.assignments))
-        .order_by(models.Employee.id)
-    )
+    # --- 1. Fetch employees ---
+    stmt = select(models.Employee).options(selectinload(models.Employee.assignments)).order_by(models.Employee.id)
     result = await session.execute(stmt)
     employees = result.scalars().all()
 
-    # 2. Fetch all submissions related to these employees
+    # --- 2. Fetch submissions ---
     emp_ids = [e.id for e in employees]
     submissions = []
     if emp_ids:
-        sub_stmt = select(models.EmployeeSubmission).where(
-            models.EmployeeSubmission.employee_id.in_(emp_ids)
-        )
+        sub_stmt = select(models.EmployeeSubmission).where(models.EmployeeSubmission.employee_id.in_(emp_ids))
         sub_result = await session.execute(sub_stmt)
         submissions = sub_result.scalars().all()
 
-    # 3. Fetch all raw SurveyResponses
+    # --- 3. Fetch survey responses ---
     all_hashes = [sub.submission_hash for sub in submissions]
     response_map = {}
     if all_hashes:
-        resp_stmt = select(models.SurveyResponse).where(
-            models.SurveyResponse.submission_hash.in_(all_hashes)
-        )
+        resp_stmt = select(models.SurveyResponse).where(models.SurveyResponse.submission_hash.in_(all_hashes))
         resp_result = await session.execute(resp_stmt)
         for resp in resp_result.scalars().all():
             response_map.setdefault(resp.submission_hash, []).append(resp)
 
-    # 4. Define the Mapping for Grading Functions
+    # --- 4. Grading functions ---
     QUESTION_GRADING_FUNCTIONS = {
         "MSES": management_score_category,
         "ICSES": client_score_category,
@@ -357,45 +321,47 @@ async def admin_employees(
 
     processed_results_lookup = {}
 
-    # 5. Process each submission
+    # --- 5. Process each submission ---
     for sub in submissions:
         responses = response_map.get(sub.submission_hash, [])
         s_code = sub.survey_name.strip()
-        
-        # Pull details from SURVEY_DETAILS in utils.py
         survey_info = SURVEY_DETAILS.get(s_code, {})
         full_name = survey_info.get("full_name", s_code)
         q_text_list = survey_info.get("questions", [])
         num_q = len(q_text_list)
-        
         grading_func = QUESTION_GRADING_FUNCTIONS.get(s_code)
 
         detailed_scores = []
+        total_score = 0
+
         for r in sorted(responses, key=lambda x: x.question_no):
             q_idx = r.question_no - 1
             q_text = q_text_list[q_idx] if q_idx < num_q else f"Question {r.question_no}"
-            
-            # Use original grading function
-            q_category = "N/A"
-            if grading_func:
-                q_category = grading_func(int(r.score))
-            
+            score = int(r.score)
+            total_score += score
+            category = grading_func(score) if grading_func else "N/A"
+
             detailed_scores.append({
                 "question": q_text,
-                "score": r.score,
-                "category": q_category
+                "score": score,
+                "category": category
             })
 
-        # Store in lookup using a unique key
+        # Compute final category for total score
+        final_category = grading_func(total_score) if grading_func else "N/A"
+
+        # Store processed data
         key = (sub.employee_id, sub.manager_email.strip().lower(), s_code)
         processed_results_lookup[key] = {
             "survey_name": s_code,
-            "full_survey_name": full_name, # Added full name for modal/display
+            "full_survey_name": full_name,
             "question_scores": detailed_scores,
+            "total_score": total_score,
+            "category": final_category,
             "submitted_at": sub.submitted_at
         }
 
-    # 6. Group Data for the Frontend
+    # --- 6. Attach manager_summary to employees ---
     for emp in employees:
         emp.manager_summary = {}
         for assignment in emp.assignments:
@@ -404,25 +370,24 @@ async def admin_employees(
                 emp.manager_summary[m_email] = {
                     "manager_name": assignment.manager_name,
                     "surveys": [],
-                    "is_submitted": assignment.is_submitted,
+                    "is_submitted": assignment.is_submitted
                 }
-            
+
             res_data = processed_results_lookup.get((emp.id, m_email, assignment.survey_name))
-            
-            # Fetch full name for the list display
             display_name = SURVEY_DETAILS.get(assignment.survey_name, {}).get("full_name", assignment.survey_name)
 
             emp.manager_summary[m_email]["surveys"].append({
                 "survey_name": assignment.survey_name,
-                "display_name": display_name, # Added display_name
+                "display_name": display_name,
                 "is_submitted": assignment.is_submitted,
                 "result": res_data
             })
 
+    # --- 7. Return template ---
     return templates.TemplateResponse(
-        "admin/employees.html", 
+        "admin/employees.html",
         {
-            "request": request, 
+            "request": request,
             "employees": employees,
             "imported": imported,
             "added": added,
@@ -430,9 +395,12 @@ async def admin_employees(
             "added_single": added_single,
             "invited": invited,
             "invited_count": invited_count,
-            "reminded": reminded
+            "reminded": reminded,
+            "aggregate_employee_scores": aggregate_employee_scores,
+            "SURVEY_DETAILS": SURVEY_DETAILS
         }
     )
+
 
 
 
@@ -540,6 +508,18 @@ from sqlalchemy.future import select
 from typing import Optional
 
 
+from fastapi import APIRouter, Request, Form, File, UploadFile, Depends, HTTPException
+from fastapi.responses import RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from typing import Optional
+from io import StringIO, TextIOWrapper
+import csv
+import secrets
+
+from app import models
+from app.utils import hash_token, normalize_survey_name
+
 @app.post("/admin/employees/import")
 async def import_employees(
     request: Request,
@@ -548,7 +528,15 @@ async def import_employees(
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
-    # 1. Determine Source
+    """
+    Import employees from CSV.
+    Expected CSV columns:
+    SurveyNames, EmpName, Position, Dept, MgrNames, MgrEmails, EmpEmail
+    SurveyNames can be either:
+      - Short codes: MSES, ICSES, TSES
+      - Full names: Management Satisfaction Survey, Internal Customer Satisfaction, Team Satisfaction
+    """
+    # 1️⃣ Determine CSV source
     if csv_file and csv_file.filename:
         csv_stream = TextIOWrapper(csv_file.file, encoding="utf-8")
     elif csv_rows and csv_rows.strip():
@@ -557,18 +545,30 @@ async def import_employees(
         raise HTTPException(status_code=400, detail="No CSV data provided")
 
     reader = csv.reader(csv_stream)
-    next(reader, None)  # Skip header row
+    next(reader, None)  # Skip header row if present
 
     added_count = 0
     updated_count = 0
+    skipped_rows = 0
 
     for row in reader:
-        # Expected CSV: SurveyNames, EmpName, Position, Dept, MgrNames, MgrEmails, EmpEmail
         if not row or len(row) < 7:
+            skipped_rows += 1
             continue
 
-        # Parse and clean data
-        survey_names = [s.strip() for s in row[0].split(",") if s.strip()]
+        # 2️⃣ Parse and normalize survey names
+        raw_survey_names = [s.strip() for s in row[0].split(",") if s.strip()]
+        survey_names = []
+        for s in raw_survey_names:
+            norm = normalize_survey_name(s)
+            if norm in ("MSES", "ICSES", "TSES"):
+                survey_names.append(norm)
+
+        if not survey_names:
+            skipped_rows += 1
+            continue  # Skip row if no valid survey
+
+        # 3️⃣ Parse employee and manager info
         emp_name = row[1].strip()
         pos = row[2].strip()
         dept = row[3].strip()
@@ -577,9 +577,10 @@ async def import_employees(
         emp_email = row[6].strip().lower()
 
         if not emp_email:
+            skipped_rows += 1
             continue
 
-        # 2. Upsert Employee (Find existing or create new)
+        # 4️⃣ Upsert Employee
         stmt = select(models.Employee).where(models.Employee.email == emp_email)
         result = await session.execute(stmt)
         employee = result.scalars().first()
@@ -592,87 +593,82 @@ async def import_employees(
                 position=pos
             )
             session.add(employee)
-            await session.flush()  # Get employee.id for the assignments below
+            await session.flush()  # Get employee.id
             added_count += 1
         else:
-            # Sync metadata if it changed in the CSV
+            # Update existing employee
             employee.name = emp_name
             employee.position = pos
             employee.department = dept
             updated_count += 1
 
-        # 3. Create SurveyAssignments for each manager-survey combination
+        # 5️⃣ Create SurveyAssignments for each manager-survey combination
         for survey in survey_names:
             for i, mgr_email in enumerate(manager_emails):
-                # Fallback to "Manager" if the names list is shorter than the emails list
                 mgr_name = manager_names[i] if i < len(manager_names) else "Manager"
 
-                # Check if this specific assignment already exists (Relational Unique Check)
+                # Skip if assignment already exists
                 assignment_stmt = select(models.SurveyAssignment).where(
                     models.SurveyAssignment.employee_id == employee.id,
                     models.SurveyAssignment.manager_email == mgr_email,
                     models.SurveyAssignment.survey_name == survey
                 )
                 existing_assignment = (await session.execute(assignment_stmt)).scalars().first()
-                
                 if existing_assignment:
-                    continue  # Skip if this manager is already assigned this survey for this employee
+                    continue
 
-                # Generate a new unique token for this specific assignment
+                # Create new assignment with unique token
                 token = secrets.token_urlsafe(32)
-                token_hash = hash_token(token) 
-                
                 new_assignment = models.SurveyAssignment(
                     employee_id=employee.id,
                     manager_email=mgr_email,
                     manager_name=mgr_name,
                     survey_name=survey,
-                    invite_token_hash=token_hash
+                    invite_token_hash=hash_token(token)
                 )
                 session.add(new_assignment)
 
     await session.commit()
-    
+
     return RedirectResponse(
-        url=f"/admin/employees?imported=1&added={added_count}&updated={updated_count}",
+        url=f"/admin/employees?imported=1&added={added_count}&updated={updated_count}&skipped={skipped_rows}",
         status_code=303
     )
+
+
 
 SURVEY_EMAIL_CONTENT = {
     "TSES": {
         "subject": "Team Satisfaction Survey – Feedback Request",
         "intro": (
-            "As part of our ongoing efforts to encourage feedback on non-KPI parameters, "
+            "As part of our ongoing efforts to encourage feedback, "
             "we kindly request your participation in providing feedback about your line manager, "
             "<strong>{employee_name}</strong>."
         ),
         "value": (
-            "Your feedback is invaluable in helping us identify areas where individuals "
-            "can further improve and grow."
+            "This feedback is invaluable in providing inputs on areas where individuals can do better. "
         ),
     },
     "MSES": {
         "subject": "Management Satisfaction Survey – Feedback Request",
         "intro": (
-            "As part of our ongoing efforts to encourage feedback on non-KPI parameters, "
+            "As part of our ongoing efforts to encourage feedback, "
             "we kindly request your participation in providing feedback on your team member, "
             "<strong>{employee_name}</strong>."
         ),
         "value": (
-            "Your feedback plays an important role in identifying individual strengths, "
-            "areas for development, and supporting the overall growth of the team."
+            "Your feedback is essential in identifying individual strengths, areas for development, and supporting the overall growth of your team. "
         ),
     },
     "ICSES": {
         "subject": "Internal Customer Satisfaction Survey – Feedback Request",
         "intro": (
-            "As part of our ongoing efforts to encourage feedback on non-KPI parameters, "
+            "As part of our ongoing efforts to encourage feedback, "
             "we kindly request your participation in providing feedback on your colleague, "
             "<strong>{employee_name}</strong>."
         ),
         "value": (
-            "This feedback is invaluable in identifying areas where individuals "
-            "can further improve and enhance collaboration across teams."
+            "This feedback is invaluable in providing inputs on areas where individuals can do better. "
         ),
     },
 }
@@ -752,8 +748,7 @@ async def invite_employee(
               </p>
 
               <p style="font-size:14px;">
-                <strong>Please note:</strong> All responses are completely anonymous, and no
-                individual-level details will be shared.
+                <strong>Please note that all responses are anonymous, and we will not have any details of individual responses</strong>
               </p>
 
               <p style="font-size:14px;">
@@ -1095,7 +1090,7 @@ async def get_assignment_by_token(session: AsyncSession, token: str):
 
 import secrets
 import datetime as dt
-from app.utils import SURVEY_DETAILS, SCORES, weighted_score
+from app.utils import SURVEY_DETAILS, SCORES
 
 def get_survey_data(stored_name: str):
     if not stored_name:
@@ -1162,7 +1157,7 @@ async def submit_survey(
     if assignment.is_submitted:
         raise HTTPException(status_code=400, detail="Already submitted.")
 
-    # Use flexible lookup to handle short/long names stored in DB
+    # Lookup survey info
     survey_code, survey_info = get_survey_data(assignment.survey_name)
     if not survey_info:
         raise HTTPException(status_code=400, detail="Survey configuration not found")
@@ -1170,44 +1165,51 @@ async def submit_survey(
     employee = assignment.employee
     questions_list = survey_info["questions"]
     full_name = survey_info["full_name"]
-    
+
     form_data = await request.form()
     submission_hash = secrets.token_hex(32)
+
+    total_score = 0  # Initialize total score
 
     # Validate and Save Responses
     for i in range(1, len(questions_list) + 1):
         raw_val = form_data.get(f"q{i}")
         try:
             score = int(raw_val)
-            if score not in SCORES: raise ValueError
+            if score not in SCORES:
+                raise ValueError
         except (TypeError, ValueError):
-            return templates.TemplateResponse("survey/form.html", {
-                "request": request, 
-                "employee": employee, 
-                "questions": questions_list,
-                "scores": sorted(list(SCORES.keys()), reverse=True), 
-                "score_labels": SCORES, 
-                "token": token,
-                "current_survey_name": full_name, 
-                "error": "All questions are required"
-            }, status_code=400)
+            return templates.TemplateResponse(
+                "survey/form.html",
+                {
+                    "request": request,
+                    "employee": employee,
+                    "questions": questions_list,
+                    "scores": sorted(list(SCORES.keys()), reverse=True),
+                    "score_labels": SCORES,
+                    "token": token,
+                    "current_survey_name": full_name,
+                    "error": "All questions are required"
+                },
+                status_code=400
+            )
 
-        # Apply weighting logic
-        final_score = weighted_score(score, questions_list) 
+        total_score += score  # **just sum the scores**
 
+        # Save individual response
         session.add(models.SurveyResponse(
             submission_hash=submission_hash,
             department=employee.department,
-            survey_name=survey_code, # Standardize to code when saving results
+            survey_name=survey_code,
             question_no=i,
-            score=final_score
+            score=score  # store actual score
         ))
 
     # Record the submission
     session.add(models.EmployeeSubmission(
         employee_id=employee.id,
         manager_email=assignment.manager_email,
-        survey_name=survey_code, # Save standardized code
+        survey_name=survey_code,
         submission_hash=submission_hash,
         submitted_at=dt.datetime.utcnow()
     ))
@@ -1216,7 +1218,17 @@ async def submit_survey(
     assignment.submitted_at = dt.datetime.utcnow()
     await session.commit()
 
-    return templates.TemplateResponse("survey/submitted.html", {"request": request, "employee": employee})
+    # Optionally, you can pass total_score to the template for display
+    return templates.TemplateResponse(
+        "survey/submitted.html",
+        {
+            "request": request,
+            "employee": employee,
+            "total_score": total_score,  # NEW: total score
+            "survey_name": full_name
+        }
+    )
+
 
 @app.get("/health")
 async def healthcheck():
