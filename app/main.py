@@ -706,9 +706,25 @@ from typing import Dict, List
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import secrets
+import datetime as dt
+from collections import defaultdict
+from typing import Dict, List
+
+from sqlalchemy.ext.asyncio import AsyncSession
 from app import models
 from app.utils import SURVEY_DETAILS, normalize_survey_name, hash_token
 
+
+
+from collections import defaultdict
+import secrets
+import datetime as dt
+from typing import Dict, List
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app import models
+from app.utils import SURVEY_DETAILS, normalize_survey_name, hash_token
 
 
 async def invite_employee(
@@ -722,13 +738,12 @@ async def invite_employee(
 ) -> None:
     """
     Sends survey invitations to a manager, batching by survey.
-    
+
     employee_map = {
         "Alice": [assignment1, assignment2],
         "Bob":   [assignment3]
     }
     """
-
     deadline = "10th Feb 2026"
 
     # --- 1️⃣ Group assignments by survey_code ---
@@ -736,9 +751,15 @@ async def invite_employee(
     for employee_name, assignments in employee_map.items():
         for assignment in assignments:
             survey_code = normalize_survey_name(assignment.survey_name)
+            token = secrets.token_urlsafe(32)
+            assignment.invite_token_hash = hash_token(token)
+            assignment.invited_at = dt.datetime.utcnow()
+            link = f"{base_url}/survey/{token}"
+
             survey_map[survey_code].append({
                 "employee_name": employee_name,
-                "assignment": assignment
+                "assignment": assignment,
+                "link": link
             })
 
     # --- 2️⃣ Send one email per survey_code ---
@@ -749,115 +770,140 @@ async def invite_employee(
         if not email_cfg or not survey_info:
             continue
 
-        body_html = ""
-        for item in items:
+        # --- 2a. Single employee ---
+        if len(items) == 1:
+            item = items[0]
             employee_name = item["employee_name"]
-            assignment = item["assignment"]
+            link = item["link"]
 
-            # Generate unique token per assignment
-            token = secrets.token_urlsafe(32)
-            assignment.invite_token_hash = hash_token(token)
-            assignment.invited_at = dt.datetime.utcnow()
-            link = f"{base_url}/survey/{token}"
-
-            body_html += f"""
-            <div style="margin-bottom:32px; padding-bottom:24px;
-                        border-bottom:1px solid #00000033;">
-              
-              <p style="font-size:15px; line-height:1.6; color:#000;">
+            body_html = f"""
+            <p style="font-size:15px; line-height:1.6; color:#000;">
                 <strong>{survey_info['full_name']}</strong>
-              </p>
+            </p>
 
-              <p style="font-size:15px; line-height:1.6; color:#000;">
+            <p style="font-size:15px; line-height:1.6; color:#000;">
                 {email_cfg['intro'].format(employee_name=employee_name)}
-              </p>
+            </p>
 
-              <p style="font-size:15px; line-height:1.6; color:#000;">
+            <p style="font-size:15px; line-height:1.6; color:#000;">
                 {email_cfg['value']}
-              </p>
+            </p>
 
-              <div style="text-align:center; margin:16px 0;">
+            <div style="text-align:center; margin:16px 0;">
                 <a href="{link}"
-                   style="display:inline-block;
-                          background:#000;
-                          color:#a99a68;
-                          padding:14px 28px;
-                          border-radius:6px;
-                          text-decoration:none;
-                          font-weight:bold;">
-                  Start {survey_info['full_name']}
+                   style="display:inline-block; background:#000; color:#a99a68;
+                          padding:14px 28px; border-radius:6px;
+                          text-decoration:none; font-weight:bold;">
+                    Start {survey_info['full_name']}
                 </a>
-              </div>
+            </div>
 
-              <p style="font-size:13px; color:#333; word-break:break-all;">
+            <p style="font-size:13px; color:#333; word-break:break-all;">
                 If the button above doesn’t work, please copy the link below:<br>
                 <a href="{link}" style="color:#000; text-decoration:underline;">
-                  {link}
+                    {link}
                 </a>
-              </p>
+            </p>
+            """
+        else:
+            # --- 2b. Multiple employees: table layout ---
+            rows = ""
+            for item in items:
+                employee_name = item["employee_name"]
+                link = item["link"]
+                rows += f"""
+                <tr>
+                    <td style="padding:8px; border:1px solid #000;">{employee_name}</td>
+                    <td style="padding:8px; border:1px solid #000; text-align:center;">
+                        <a href="{link}"
+                           style="display:inline-block; background:#000; color:#a99a68;
+                                  padding:8px 16px; border-radius:6px; text-decoration:none; font-weight:bold;">
+                            Start Survey
+                        </a>
+                    </td>
+                    <td style="padding:8px; border:1px solid #000; word-break:break-all;">
+                        <a href="{link}" style="color:#000; text-decoration:underline;">{link}</a>
+                    </td>
+                </tr>
+                """
+            body_html = f"""
+            <p style="font-size:15px; line-height:1.6; color:#000;">
+                <strong>{survey_info['full_name']}</strong>
+            </p>
 
-            </div>
+            <p style="font-size:15px; line-height:1.6; color:#000;">
+                {email_cfg['intro'].format(employee_name='your team members')}
+            </p>
+
+            <p style="font-size:15px; line-height:1.6; color:#000;">
+                {email_cfg['value']}
+            </p>
+
+            <table width="100%" cellpadding="4" cellspacing="0"
+                   style="border-collapse:collapse; margin-top:16px; font-size:14px;">
+                <thead>
+                    <tr style="background:#000; color:#a99a68;">
+                        <th style="padding:8px; border:1px solid #000;">Employee</th>
+                        <th style="padding:8px; border:1px solid #000;">Survey</th>
+                        <th style="padding:8px; border:1px solid #000;">Link</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows}
+                </tbody>
+            </table>
             """
 
         # --- 3️⃣ Wrap in full email template ---
         html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>{survey_info['full_name']} Invitation</title>
-</head>
-<body style="margin:0; padding:40px; background:#000;
-             font-family:Arial, Helvetica, sans-serif;">
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>{survey_info['full_name']} Invitation</title>
+        </head>
+        <body style="margin:0; padding:40px; background:#000; font-family:Arial, Helvetica, sans-serif;">
 
-  <table width="100%" cellpadding="0" cellspacing="0">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0"
-               style="background:#a99a68; border-radius:8px;
-                      overflow:hidden;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0"
+                       style="background:#a99a68; border-radius:8px; overflow:hidden;">
 
-          <tr>
-            <td style="background:#000; color:#a99a68;
-                       padding:20px; text-align:center;">
-              <h2 style="margin:0;">Survey Invitation</h2>
-            </td>
-          </tr>
+                  <tr>
+                    <td style="background:#000; color:#a99a68; padding:20px; text-align:center;">
+                      <h2 style="margin:0;">Survey Invitation</h2>
+                    </td>
+                  </tr>
 
-          <tr>
-            <td style="padding:32px;">
-              <p style="font-size:16px;">Dear {manager_name},</p>
+                  <tr>
+                    <td style="padding:32px;">
+                      <p style="font-size:16px;">Dear {manager_name},</p>
+                      {body_html}
+                      <p style="font-size:14px; margin-top:24px;">
+                        <strong>All responses are anonymous.</strong>
+                      </p>
+                      <p style="font-size:14px;">
+                        Please complete the survey by
+                        <strong>{deadline}</strong>.
+                      </p>
+                    </td>
+                  </tr>
 
-              {body_html}
+                  <tr>
+                    <td style="background:#000; color:#a99a68; padding:16px; text-align:center; font-size:12px;">
+                      © {dt.datetime.utcnow().year} InfinityCapital. All rights reserved.
+                    </td>
+                  </tr>
 
-              <p style="font-size:14px; margin-top:24px;">
-                <strong>All responses are anonymous.</strong>
-              </p>
+                </table>
+              </td>
+            </tr>
+          </table>
 
-              <p style="font-size:14px;">
-                Please complete the survey by
-                <strong>{deadline}</strong>.
-              </p>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="background:#000; color:#a99a68;
-                       padding:16px; text-align:center;
-                       font-size:12px;">
-              © {dt.datetime.utcnow().year} InfinityCapital.
-              All rights reserved.
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-
-</body>
-</html>
-"""
+        </body>
+        </html>
+        """
 
         # --- 4️⃣ Send the email ---
         await send_email(
@@ -869,12 +915,13 @@ async def invite_employee(
             from_email=smtp.from_email,
             from_name=smtp.from_name,
             to_email=manager_email,
-            subject=f"Pending Feedback Survey – {survey_info['full_name']}",
+            subject=f"Feedback Survey – {survey_info['full_name']}",
             html_content=html,
         )
 
     # --- 5️⃣ Commit assignments with token updates ---
     await session.commit()
+
 
 
 
