@@ -691,108 +691,137 @@ SURVEY_EMAIL_CONTENT = {
 
 
 
+from collections import defaultdict
 import secrets
 import datetime as dt
 from sqlalchemy.future import select
-from app.security import hash_token
-# Assuming send_email is imported from your mail utility
-# from app.utils.mail import send_email 
-
 from app.utils import SURVEY_DETAILS, normalize_survey_name, hash_token
+from typing import Dict, List
+
 
 async def invite_employee(
+    *,
     session: AsyncSession,
-    employee: models.Employee,
     smtp: models.SMTPSettings,
-    base_url: str
+    base_url: str,
+    manager_email: str,
+    manager_name: str,
+    employee_map: Dict[str, List[models.SurveyAssignment]],
 ) -> None:
-    stmt = (
-        select(models.SurveyAssignment)
-        .where(models.SurveyAssignment.employee_id == employee.id)
-        .where(models.SurveyAssignment.is_submitted == False)
-    )
-    result = await session.execute(stmt)
-    assignments = result.scalars().all()
+    """
+    Sends ONE consolidated survey email to a manager.
 
-    for assignment in assignments:
-        # Normalize survey name
-        survey_code = normalize_survey_name(assignment.survey_name)
-        survey_info = SURVEY_DETAILS.get(survey_code, {})
-        email_cfg = SURVEY_EMAIL_CONTENT.get(survey_code)
+    employee_map = {
+        "Alice": [assignment1, assignment2],
+        "Bob":   [assignment3]
+    }
+    """
 
-        if not email_cfg:
-            continue  # Safety fallback
+    deadline = "10th Feb 2026"
+    body_html = ""
 
-        token = secrets.token_urlsafe(32)
-        assignment.invite_token_hash = hash_token(token)
-        assignment.invited_at = dt.datetime.utcnow()
+    for employee_name, assignments in employee_map.items():
+        for assignment in assignments:
+            survey_code = normalize_survey_name(assignment.survey_name)
+            email_cfg = SURVEY_EMAIL_CONTENT.get(survey_code)
+            survey_info = SURVEY_DETAILS.get(survey_code)
 
-        link = f"{base_url}/survey/{token}"
-        deadline = "10th Feb 2026"
+            if not email_cfg or not survey_info:
+                continue
 
-        # Build email HTML (same design, updated content)
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <title>{email_cfg['subject']}</title>
-</head>
-<body style="margin:0; padding:0; background-color:#000000; font-family: Arial, Helvetica, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#000000; padding:40px 0;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0"
-               style="background-color:#a99a68; border-radius:8px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.08);">
-          
-          <tr>
-            <td style="background-color:#000000; padding:24px; text-align:center;">
-              <h1 style="margin:0; color:#a99a68; font-size:22px;">Survey Invitation</h1>
-            </td>
-          </tr>
+            # Generate secure invite token
+            token = secrets.token_urlsafe(32)
+            assignment.invite_token_hash = hash_token(token)
+            assignment.invited_at = dt.datetime.utcnow()
 
-          <tr>
-            <td style="padding:32px; color:#000000;">
-              <p style="font-size:16px;">Dear {assignment.manager_name},</p>
+            link = f"{base_url}/survey/{token}"
 
-              <p style="font-size:15px; line-height:1.6;">
-                {email_cfg['intro'].format(employee_name=employee.name)}
+            body_html += f"""
+            <div style="margin:32px 0; padding-bottom:32px;
+                        border-bottom:1px solid #00000033;">
+
+              <h3 style="margin-bottom:12px; font-size:18px; color:#000;">
+                {survey_info['full_name']}
+              </h3>
+
+              <p style="font-size:15px; line-height:1.6; color:#000;">
+                {email_cfg['intro'].format(employee_name=employee_name)}
               </p>
 
-              <p style="font-size:15px; line-height:1.6;">
+              <p style="font-size:15px; line-height:1.6; color:#000;">
                 {email_cfg['value']}
               </p>
 
-              <p style="font-size:14px;">
-                <strong>Please note that all responses are anonymous, and we will not have any details of individual responses</strong>
-              </p>
-
-              <p style="font-size:14px;">
-                Kindly ensure that the survey is completed by <strong>{deadline}</strong>.
-              </p>
-
-              <div style="text-align:center; margin:32px 0;">
+              <div style="text-align:center; margin:24px 0;">
                 <a href="{link}"
-                   style="background-color:#000000; color:#a99a68; text-decoration:none;
-                          padding:14px 28px; font-size:16px; border-radius:6px; display:inline-block;">
-                  Start Survey
+                   style="display:inline-block;
+                          background:#000;
+                          color:#a99a68;
+                          padding:14px 28px;
+                          border-radius:6px;
+                          text-decoration:none;
+                          font-weight:bold;">
+                  Start {survey_info['full_name']}
                 </a>
               </div>
 
-              <p style="font-size:13px;">
-                If the button above doesn’t work, please copy the link below:
+              <p style="font-size:13px; color:#333; word-break:break-all;">
+                If the button above doesn’t work, please copy the link below:<br>
+                <a href="{link}" style="color:#000; text-decoration:underline;">
+                  {link}
+                </a>
               </p>
 
-              <p style="font-size:13px; word-break:break-all;">
-                <a href="{link}" style="color:#000000;">{link}</a>
+            </div>
+            """
+
+    html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Survey Invitation</title>
+</head>
+<body style="margin:0; padding:40px; background:#000;
+             font-family:Arial, Helvetica, sans-serif;">
+
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0"
+               style="background:#a99a68; border-radius:8px;
+                      overflow:hidden;">
+
+          <tr>
+            <td style="background:#000; color:#a99a68;
+                       padding:20px; text-align:center;">
+              <h2 style="margin:0;">Survey Invitation</h2>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:32px;">
+              <p style="font-size:16px;">Dear {manager_name},</p>
+
+              {body_html}
+
+              <p style="font-size:14px; margin-top:24px;">
+                <strong>All responses are anonymous.</strong>
+              </p>
+
+              <p style="font-size:14px;">
+                Please complete the surveys by
+                <strong>{deadline}</strong>.
               </p>
             </td>
           </tr>
 
           <tr>
-            <td style="background-color:#000000; padding:20px; text-align:center;
-                       font-size:12px; color:#a99a68;">
-              © {dt.datetime.utcnow().year} InfinityCapital. All rights reserved.
+            <td style="background:#000; color:#a99a68;
+                       padding:16px; text-align:center;
+                       font-size:12px;">
+              © {dt.datetime.utcnow().year} InfinityCapital.
+              All rights reserved.
             </td>
           </tr>
 
@@ -800,26 +829,71 @@ async def invite_employee(
       </td>
     </tr>
   </table>
+
 </body>
 </html>
 """
 
-        await send_email(
-            host=smtp.host,
-            port=smtp.port,
-            username=smtp.username,
-            password=smtp.password,
-            use_tls=smtp.use_tls,
-            from_email=smtp.from_email,
-            from_name=smtp.from_name,
-            to_email=assignment.manager_email,
-            subject=email_cfg["subject"],
-            html_content=html,
-        )
+    await send_email(
+        host=smtp.host,
+        port=smtp.port,
+        username=smtp.username,
+        password=smtp.password,
+        use_tls=smtp.use_tls,
+        from_email=smtp.from_email,
+        from_name=smtp.from_name,
+        to_email=manager_email,
+        subject="Feedback Surveys",
+        html_content=html,
+    )
 
     await session.commit()
 
 
+async def invite_managers(
+    session: AsyncSession,
+    smtp: models.SMTPSettings,
+    base_url: str,
+    employee_id: int | None = None,
+    reminders_only: bool = False,
+):
+    stmt = (
+        select(models.SurveyAssignment)
+        .options(joinedload(models.SurveyAssignment.employee))
+        .where(models.SurveyAssignment.is_submitted == False)
+    )
+
+    if reminders_only:
+        stmt = stmt.where(models.SurveyAssignment.invited_at != None)
+    else:
+        stmt = stmt.where(models.SurveyAssignment.invited_at == None)
+
+    if employee_id:
+        stmt = stmt.where(models.SurveyAssignment.employee_id == employee_id)
+
+    assignments = (await session.execute(stmt)).scalars().all()
+    if not assignments:
+        return 0
+
+    manager_map = defaultdict(lambda: defaultdict(list))
+
+    for a in assignments:
+        manager_map[a.manager_email][a.employee.name].append(a)
+
+    for manager_email, emp_map in manager_map.items():
+        manager_name = next(iter(emp_map.values()))[0].manager_name
+
+        await invite_employee(
+            session=session,
+            smtp=smtp,
+            base_url=base_url,
+            manager_email=manager_email,
+            manager_name=manager_name,
+            employee_map=emp_map,
+        )
+
+    await session.commit()
+    return len(manager_map)
 
 
 from sqlalchemy import select, and_, exists
@@ -831,26 +905,17 @@ async def resend_invite(
     session: AsyncSession = Depends(get_session),
     admin_id: int = Depends(require_admin),
 ):
-    employee = await session.get(models.Employee, employee_id)
-    if not employee or not employee.is_active:
-        return RedirectResponse(url="/admin/employees", status_code=303)
-    
-    # Check if there are any pending assignments to resend
-    stmt = select(models.SurveyAssignment).where(
-        models.SurveyAssignment.employee_id == employee_id,
-        models.SurveyAssignment.is_submitted == False
-    )
-    result = await session.execute(stmt)
-    if not result.scalars().first():
-        # All surveys for this person are already submitted
-        return RedirectResponse(url="/admin/employees", status_code=303)
-
     smtp = await get_smtp(session)
     base_url = str(request.base_url).rstrip("/")
-    
-    # invite_employee now handles looping through specific assignments
-    await invite_employee(session, employee, smtp, base_url)
-    
+
+    await invite_managers(
+        session,
+        smtp,
+        base_url,
+        employee_id=employee_id,
+        reminders_only=True
+    )
+
     return RedirectResponse(url="/admin/employees", status_code=303)
 
 from sqlalchemy import delete
@@ -902,22 +967,19 @@ async def send_single_invite(
     smtp = await get_smtp(session)
     base_url = str(request.base_url).rstrip("/")
 
-    # Fetch ONLY this specific employee
-    stmt = select(models.Employee).where(models.Employee.id == employee_id)
-    result = await session.execute(stmt)
-    employee = result.scalar_one_or_none()
-
-    if not employee:
-        return RedirectResponse(url="/admin/employees?error=Employee+not+found", status_code=303)
-
-    # Trigger the email for just this person
-    await invite_employee(session, employee, smtp, base_url)
-    await session.commit()
+    await invite_managers(
+        session,
+        smtp,
+        base_url,
+        employee_id=employee_id,
+        reminders_only=False
+    )
 
     return RedirectResponse(
-        url=f"/admin/employees?invited=1&invited_count=1", 
+        url="/admin/employees?invited=1",
         status_code=303
     )
+
 
 
 @app.post("/admin/send-invites")
@@ -929,27 +991,15 @@ async def send_invites(
     smtp = await get_smtp(session)
     base_url = str(request.base_url).rstrip("/")
 
-    # Fetch employees who have at least one assignment that has NEVER been invited
-    stmt = select(models.Employee).where(
-        models.Employee.is_active == True,
-        exists().where(
-            and_(
-                models.SurveyAssignment.employee_id == models.Employee.id,
-                models.SurveyAssignment.invited_at != None
-            )
-        )
+    count = await invite_managers(
+        session,
+        smtp,
+        base_url,
+        reminders_only=False
     )
-    result = await session.execute(stmt)
-    employees = result.scalars().all()
 
-    invited_count = 0
-    for employee in employees:
-        await invite_employee(session, employee, smtp, base_url)
-        invited_count += 1
-
-    await session.commit()
     return RedirectResponse(
-        url=f"/admin/employees?invited=1&invited_count={invited_count}",
+        url=f"/admin/employees?invited=1&invited_count={count}",
         status_code=303,
     )
 
@@ -963,28 +1013,15 @@ async def send_reminders(
     smtp = await get_smtp(session)
     base_url = str(request.base_url).rstrip("/")
 
-    # Fetch employees who have assignments that ARE invited but NOT submitted
-    stmt = select(models.Employee).where(
-        models.Employee.is_active == True,
-        exists().where(
-            and_(
-                models.SurveyAssignment.employee_id == models.Employee.id,
-                models.SurveyAssignment.invited_at != None,
-                models.SurveyAssignment.is_submitted == False
-            )
-        )
+    count = await invite_managers(
+        session,
+        smtp,
+        base_url,
+        reminders_only=True
     )
-    result = await session.execute(stmt)
-    employees = result.scalars().all()
 
-    invited_count = 0
-    for employee in employees:
-        await invite_employee(session, employee, smtp, base_url)
-        invited_count += 1
-
-    await session.commit()
     return RedirectResponse(
-        url=f"/admin/employees?reminded=1&invited_count={invited_count}",
+        url=f"/admin/employees?reminded=1&invited_count={count}",
         status_code=303,
     )
 
