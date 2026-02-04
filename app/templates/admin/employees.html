@@ -12,11 +12,11 @@
         </div>
         <button onclick="this.parentElement.parentElement.remove()" class="text-[#ad9f6f] hover:text-[#7a6a3a] text-xl font-bold leading-none">&times;</button>
     </div>
-    <div class="mt-4">
+    <!-- <div class="mt-4">
         <form method="post" action="/admin/employees/{{request.query_params.get('new_id') }}/resend">
             <button class="bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-[#9c8f5f] transition-colors font-bold text-sm shadow-sm">Send Invite Now</button>
         </form>
-    </div>
+    </div> -->
 </div>
 {% endif %}
 
@@ -33,11 +33,11 @@
             </div>
             <button onclick="this.parentElement.parentElement.remove()" class="text-green-700 hover:text-green-900 text-xl font-bold leading-none">&times;</button>
         </div>
-        <div class="mt-4">
+        <!-- <div class="mt-4">
             <form method="post" action="/admin/send-invites">
                 <button class="bg-[#ad9f6f] text-white px-4 py-2 rounded-md hover:bg-[#9c8f5f] transition-colors font-bold text-sm">Send Invites Now</button>
             </form>
-        </div>
+        </div> -->
     </div>
     {% endif %}
 
@@ -117,8 +117,8 @@
 
     <!-- Send Invites / Reminders -->
     <div class="bg-white shadow-lg rounded-xl p-6 border border-gray-100 flex flex-col justify-center space-y-4">
-        <form method="post" action="/admin/send-invites">
-            <button class="w-full bg-[#ad9f6f] text-white py-4 rounded-xl font-bold hover:bg-[#9c8f5f] shadow-md transition-all">Send All Pending Invites</button>
+        <form method="post" action="/admin/send-reminders">
+            <button class="w-full bg-[#ad9f6f] text-white py-4 rounded-xl font-bold hover:bg-[#9c8f5f] shadow-md transition-all">Send Invites to All</button>
         </form>
         <form method="post" action="/admin/send-reminders">
             <button class="w-full bg-white border-2 border-gray-200 text-gray-700 py-4 rounded-xl font-bold hover:bg-gray-50 transition-all">Send Reminders to Pending</button>
