@@ -699,6 +699,18 @@ from app.utils import SURVEY_DETAILS, normalize_survey_name, hash_token
 from typing import Dict, List
 
 
+import secrets
+import datetime as dt
+from collections import defaultdict
+from typing import Dict, List
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app import models
+from app.utils import SURVEY_DETAILS, normalize_survey_name, hash_token
+
+
+
 async def invite_employee(
     *,
     session: AsyncSession,
@@ -709,8 +721,8 @@ async def invite_employee(
     employee_map: Dict[str, List[models.SurveyAssignment]],
 ) -> None:
     """
-    Sends ONE consolidated survey email to a manager.
-
+    Sends survey invitations to a manager, batching by survey.
+    
     employee_map = {
         "Alice": [assignment1, assignment2],
         "Bob":   [assignment3]
@@ -718,31 +730,43 @@ async def invite_employee(
     """
 
     deadline = "10th Feb 2026"
-    body_html = ""
 
+    # --- 1️⃣ Group assignments by survey_code ---
+    survey_map: defaultdict[str, List[Dict]] = defaultdict(list)
     for employee_name, assignments in employee_map.items():
         for assignment in assignments:
             survey_code = normalize_survey_name(assignment.survey_name)
-            email_cfg = SURVEY_EMAIL_CONTENT.get(survey_code)
-            survey_info = SURVEY_DETAILS.get(survey_code)
+            survey_map[survey_code].append({
+                "employee_name": employee_name,
+                "assignment": assignment
+            })
 
-            if not email_cfg or not survey_info:
-                continue
+    # --- 2️⃣ Send one email per survey_code ---
+    for survey_code, items in survey_map.items():
+        email_cfg = SURVEY_EMAIL_CONTENT.get(survey_code)
+        survey_info = SURVEY_DETAILS.get(survey_code)
 
-            # Generate secure invite token
+        if not email_cfg or not survey_info:
+            continue
+
+        body_html = ""
+        for item in items:
+            employee_name = item["employee_name"]
+            assignment = item["assignment"]
+
+            # Generate unique token per assignment
             token = secrets.token_urlsafe(32)
             assignment.invite_token_hash = hash_token(token)
             assignment.invited_at = dt.datetime.utcnow()
-
             link = f"{base_url}/survey/{token}"
 
             body_html += f"""
-            <div style="margin:32px 0; padding-bottom:32px;
+            <div style="margin-bottom:32px; padding-bottom:24px;
                         border-bottom:1px solid #00000033;">
-
-              <h3 style="margin-bottom:12px; font-size:18px; color:#000;">
-                {survey_info['full_name']}
-              </h3>
+              
+              <p style="font-size:15px; line-height:1.6; color:#000;">
+                <strong>{survey_info['full_name']}</strong>
+              </p>
 
               <p style="font-size:15px; line-height:1.6; color:#000;">
                 {email_cfg['intro'].format(employee_name=employee_name)}
@@ -752,7 +776,7 @@ async def invite_employee(
                 {email_cfg['value']}
               </p>
 
-              <div style="text-align:center; margin:24px 0;">
+              <div style="text-align:center; margin:16px 0;">
                 <a href="{link}"
                    style="display:inline-block;
                           background:#000;
@@ -775,12 +799,13 @@ async def invite_employee(
             </div>
             """
 
-    html = f"""
+        # --- 3️⃣ Wrap in full email template ---
+        html = f"""
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Survey Invitation</title>
+  <title>{survey_info['full_name']} Invitation</title>
 </head>
 <body style="margin:0; padding:40px; background:#000;
              font-family:Arial, Helvetica, sans-serif;">
@@ -810,7 +835,7 @@ async def invite_employee(
               </p>
 
               <p style="font-size:14px;">
-                Please complete the surveys by
+                Please complete the survey by
                 <strong>{deadline}</strong>.
               </p>
             </td>
@@ -834,20 +859,23 @@ async def invite_employee(
 </html>
 """
 
-    await send_email(
-        host=smtp.host,
-        port=smtp.port,
-        username=smtp.username,
-        password=smtp.password,
-        use_tls=smtp.use_tls,
-        from_email=smtp.from_email,
-        from_name=smtp.from_name,
-        to_email=manager_email,
-        subject="Feedback Surveys",
-        html_content=html,
-    )
+        # --- 4️⃣ Send the email ---
+        await send_email(
+            host=smtp.host,
+            port=smtp.port,
+            username=smtp.username,
+            password=smtp.password,
+            use_tls=smtp.use_tls,
+            from_email=smtp.from_email,
+            from_name=smtp.from_name,
+            to_email=manager_email,
+            subject=f"Pending Feedback Survey – {survey_info['full_name']}",
+            html_content=html,
+        )
 
+    # --- 5️⃣ Commit assignments with token updates ---
     await session.commit()
+
 
 
 async def invite_managers(
