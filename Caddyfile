@@ -1,0 +1,3 @@
+survey.infinitycapital.bh {
+    reverse_proxy app:8000
+}
