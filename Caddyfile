@@ -1,3 +1,7 @@
 survey.infinitycapital.bh {
     reverse_proxy app:8000
 }
+
+survey.lifestyleenterprises.bh {
+    reverse_proxy app_b:8000
+}

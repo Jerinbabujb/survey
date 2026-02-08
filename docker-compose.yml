@@ -3,16 +3,17 @@ version: '3.9'
 services:
   app:
     build: .
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     volumes:
       - ./:/app
     env_file:
       - .env
-    # We remove the "80:8000" mapping so Caddy can use port 80
     expose:
       - "8000"
     depends_on:
       - db
+    networks:
+      - survey_shared_net
 
   db:
     image: postgres:15
@@ -20,13 +21,10 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: survey_db
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d survey_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - survey_shared_net
 
   caddy:
     image: caddy:latest
@@ -40,8 +38,15 @@ services:
       - caddy_config:/config
     depends_on:
       - app
+    networks:
+      - survey_shared_net
 
 volumes:
   pgdata:
   caddy_data:
   caddy_config:
+
+networks:
+  survey_shared_net:
+    name: survey_infinity_default  # This MUST be indented
+    driver: bridge                 # This MUST be indented

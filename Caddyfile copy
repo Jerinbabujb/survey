@@ -1,0 +1,12 @@
+survey.infinitycapital.bh {
+    reverse_proxy app:8000
+}
+# Accessible at http://localhost
+localhost {
+    reverse_proxy app:8000
+}
+
+# Accessible at http://localhost:8080
+:8080 {
+    reverse_proxy app_b:8000
+}
