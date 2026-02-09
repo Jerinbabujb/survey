@@ -59,15 +59,36 @@ async def startup_event():
 
 
 async def ensure_admin_user(session: AsyncSession) -> None:
-    result = await session.execute(select(models.AdminUser))
-    admin = result.scalars().first()
-    if admin:
-        return
-    admin_user = models.AdminUser(
-        email=settings.admin_email,
-        password_hash=get_password_hash(settings.admin_password),
-    )
-    session.add(admin_user)
+    # Fetch existing admin emails
+    result = await session.execute(select(models.AdminUser.email))
+    existing_emails = {row[0] for row in result.all()}
+
+    admins = [
+        (settings.admin_email, settings.admin_password),
+    ]
+
+    # Support ADMIN_EMAIL_2, ADMIN_EMAIL_3, ...
+    i = 2
+    while True:
+        email = getattr(settings, f"admin_email_{i}", None)
+        password = getattr(settings, f"admin_password_{i}", None)
+        if not email or not password:
+            break
+        admins.append((email, password))
+        i += 1
+
+    # Insert only missing admins
+    for email, password in admins:
+        if email not in existing_emails:
+            session.add(
+                models.AdminUser(
+                    email=email,
+                    password_hash=get_password_hash(password),
+                )
+            )
+
+
+
 
 
 async def ensure_smtp_settings(session: AsyncSession) -> None:

@@ -1,11 +1,13 @@
 from pydantic_settings import BaseSettings
 from pydantic import Field
-
+from typing import Optional
 
 class Settings(BaseSettings):
     secret_key: str = Field(default="change_me", alias="SECRET_KEY")
     admin_email: str = Field(default="admin@example.com", alias="ADMIN_EMAIL")
     admin_password: str = Field(default="changeme123", alias="ADMIN_PASSWORD")
+    admin_email_2: Optional[str] = Field(default=None, alias="ADMIN_EMAIL_2")
+    admin_password_2: Optional[str] = Field(default=None, alias="ADMIN_PASSWORD_2")
     database_url: str = Field(default="postgresql+asyncpg://postgres:postgres@db:5432/survey_db", alias="DATABASE_URL")
     sync_database_url: str = Field(default="postgresql+psycopg2://postgres:postgres@db:5432/survey_db", alias="SYNC_DATABASE_URL")
     app_host: str = Field(default="0.0.0.0", alias="APP_HOST")
