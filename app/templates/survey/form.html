@@ -16,6 +16,9 @@
       <p class="text-black/80 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed italic">
         Your responses are strictly anonymous. Completion is tracked via a secure one-way hash.
       </p>
+      <p class="text-black/80 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed italic">
+        Please rate the following from 1 to 5, with 1 being the lowest and 5 being the highest.
+      </p>
     </div>
 
     {% if error %}
@@ -45,9 +48,7 @@
                     <span class="font-black text-2xl text-black peer-checked:text-[#a99a68]">
                         {{ score }}
                     </span>
-                    <p class="text-black font-bold text-[10px] uppercase peer-checked:text-[#a99a68]">
-                        {{ score_labels[score] }}
-                    </p>
+                   
                   </div>
                 </label>
               {% endfor %}
