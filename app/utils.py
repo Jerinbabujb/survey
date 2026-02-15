@@ -159,11 +159,11 @@ def client_score_description(total: int) -> str:
 
 # ---- Team Satisfaction Survey ----
 def team_score_category(total: int) -> str:
-    if 75 <= total <= 80:
+    if 76 <= total <= 80:
         return "Outstanding"
-    elif 65 <= total <= 74:
+    elif 60 <= total <= 75:
         return "Exceeds Target"
-    elif 48 <= total <= 64:
+    elif 45 <= total <= 59:
         return "Meets Target"
     else:
         return "Below Target"
