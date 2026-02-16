@@ -904,10 +904,7 @@ async def invite_employee(
                       <p style="font-size:14px; margin-top:24px;">
                         <strong>All responses are anonymous.</strong>
                       </p>
-                      <p style="font-size:14px;">
-                        Please complete the survey by
-                        <strong>{deadline}</strong>.
-                      </p>
+                    
                     </td>
                   </tr>
 
