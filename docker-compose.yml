@@ -8,12 +8,10 @@ services:
       - ./:/app
     env_file:
       - .env
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
     depends_on:
       - db
-    networks:
-      - survey_shared_net
 
   db:
     image: postgres:15
@@ -24,30 +22,6 @@ services:
       POSTGRES_DB: survey_db
     volumes:
       - pgdata:/var/lib/postgresql/data
-    networks:
-      - survey_shared_net
-
-  caddy:
-    image: caddy:latest
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - app
-    networks:
-      - survey_shared_net
 
 volumes:
   pgdata:
-  caddy_data:
-  caddy_config:
-
-networks:
-  survey_shared_net:
-    name: survey_infinity_default
-    driver: bridge
